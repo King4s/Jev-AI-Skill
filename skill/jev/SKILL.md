@@ -1,9 +1,11 @@
 ---
 name: jev
-description: Jev is one skill for Claude Code, Codex and Hermes with three capabilities — Loop for execution and review, Route for model/skill/delegation choices, and Git for guarded repository steps. Triggers include jev, jev-loop, kør loopen, byg med jev, lad Jev styre, jev-route, lad Jev vælge, jev-git and skal det pushes.
+description: Jev-AI-Skill is one skill for Claude Code, Codex and Hermes with three capabilities — Loop for execution and review, Route for model/skill/delegation choices, and Git for guarded repository steps. Triggers include Jev-AI-Skill, jev, jev-loop, kør loopen, byg med jev, lad Jev styre, jev-route, lad Jev vælge, jev-git and skal det pushes.
 ---
 
-# jev
+# Jev-AI-Skill
+
+The project is Jev-AI-Skill; its installed skill name and invocation remain `jev`.
 
 ## Loop
 
@@ -138,7 +140,7 @@ picks up the new MCP server (setup below).
 
 ## Setup (once)
 
-From a clone of https://github.com/King4s/jev run `./install.sh` (Linux, macOS, WSL) or
+From a clone of https://github.com/King4s/Jev-AI-Skill run `./install.sh` (Linux, macOS, WSL) or
 `.\install.ps1` (Windows). Both install dependencies, sync this skill and register the
 `jev-loop` MCP server for harness CLIs they find on PATH. Windows always copies the skill
 to Claude Code's user skill directory; Claude MCP registration is conditional. Codex and

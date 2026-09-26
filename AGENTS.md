@@ -1,6 +1,6 @@
 # AGENTS.md - instructions for AI maintainers
 
-This repository contains Jev, one installed skill with three capabilities: Loop, Route and
+This repository contains Jev-AI-Skill, one installed skill with three capabilities: Loop, Route and
 Git. Keep docs and implementation aligned. Repository docs and source comments are in
 English; answer the owner in their language.
 

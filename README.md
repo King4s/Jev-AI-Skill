@@ -1,12 +1,42 @@
-# Jev
+# Jev-AI-Skill
 
-[![tests](https://github.com/King4s/jev/actions/workflows/test.yml/badge.svg)](https://github.com/King4s/jev/actions/workflows/test.yml)
+[![tests](https://github.com/King4s/Jev-AI-Skill/actions/workflows/test.yml/badge.svg)](https://github.com/King4s/Jev-AI-Skill/actions/workflows/test.yml)
 
-Jev is one installed skill with three capabilities: **Loop** coordinates execution, checks
-and an independent review; **Route** asks Jev to select a model tier, skill and delegation;
-**Git** asks Jev for a repository step and applies deterministic publishing blocks. Jev
-provides judgments through TypeSafe System One. The active client harness (Claude Code,
-Codex or Hermes) performs the work and any approved commands.
+**One workflow for your AI coding tools: build, choose the right help, review and publish.**
+
+Jev-AI-Skill brings three capabilities together in one reusable skill. Describe what you
+want to achieve, and your AI assistant gets a structured way to work toward it, check the
+result and prepare the next Git step. Jev, the decision model from TypeSafe System One,
+provides judgments; your AI coding tool performs the work.
+
+| Capability | What it does | Why it helps |
+| --- | --- | --- |
+| **Loop** | Turns a goal into execution steps, runs configured checks and requests independent review. | Completion depends on checks and a separate review, with saved state for resuming work. |
+| **Route** | Chooses a model capability tier, a relevant installed skill and whether to delegate. | Routine tasks can use lighter models while harder work gets stronger help; actual cost and quality depend on the available models. |
+| **Git** | Recommends commit, push or pull-request steps and applies repository rules. | Keeps publishing decisions tied to repository facts, review status and your authorization. |
+
+## Why use it across AI tools?
+
+Use the same goal, acceptance criteria and workflow whether you work in **Claude Code,
+Codex or Hermes**. You can keep your preferred coding assistant while giving it a common
+process for choosing help, checking progress and handing work to an independent reviewer.
+The goal and run state live in files, so another configured client can resume the same
+run when it has access to the same checkout and state. Conversation history is not
+automatically transferred, and a run should have one active executor at a time.
+
+Route works with capability tiers rather than hard-coded provider model IDs. The active
+client maps those tiers to the models and delegation tools it actually exposes. This
+lets the workflow travel between supported clients without prescribing one provider for
+every task. Jev decisions still require a TypeSafe API key.
+
+**Built-in installation currently supports Claude Code, Codex and Hermes.** Other AI
+clients need support for the skill instructions, Python helpers, MCP and an independent
+review mechanism, plus integration work. Compatibility with every AI app is not claimed.
+
+For example, ask: “Build a CSV export for this project with Jev.” Loop coordinates the
+work and checks, Route helps choose a suitable skill and model for each task, and an
+independent reviewer evaluates the result. Git then recommends an authorized repository
+step. You can also use Route or Git on their own.
 
 The installed skill is named `jev`. The MCP server and its tools keep their existing
 identity, `jev-loop` (`loop_start`, `loop_decide`, `loop_record_turn`,
@@ -23,12 +53,12 @@ Requires Python 3.11+, at least one supported harness, and a TypeSafe API key. S
 
 ```powershell
 # Windows
-git clone https://github.com/King4s/jev.git; cd jev; .\install.ps1
+git clone https://github.com/King4s/Jev-AI-Skill.git; cd Jev-AI-Skill; .\install.ps1
 ```
 
 ```bash
 # Linux, macOS or WSL
-git clone https://github.com/King4s/jev.git ~/jev && ~/jev/install.sh
+git clone https://github.com/King4s/Jev-AI-Skill.git ~/Jev-AI-Skill && ~/Jev-AI-Skill/install.sh
 ```
 
 On Windows, `install.ps1` always copies the skill to Claude Code's
@@ -160,13 +190,13 @@ to the new matching remote while retaining the rest of the policy.
 
 ## Moving existing clones after the repository rename
 
-The repository's canonical URL is `King4s/jev`. Once the GitHub rename is complete, move
+The repository's canonical URL is `King4s/Jev-AI-Skill` (previously `jev-loop` and `jev`). Move
 an existing clone to the new remote by updating its `origin`, pulling, and rerunning the
 installer. The local directory may keep its old name; runtime identities such as the MCP
 server and API key path remain `jev-loop`.
 
 ```bash
-git remote set-url origin git@github.com:King4s/jev.git
+git remote set-url origin git@github.com:King4s/Jev-AI-Skill.git
 git pull
 ./install.sh                 # Windows: .\install.ps1
 ```
