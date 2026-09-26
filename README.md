@@ -36,9 +36,9 @@ The installers set up every harness they find on PATH:
 
 | Harness | Skill | MCP server |
 | --- | --- | --- |
-| Claude Code | `~/.claude/skills/jev-loop/` | `claude mcp add` |
-| Codex | `~/.agents/skills/jev-loop/` | `codex mcp add` (`~/.codex/config.toml`) |
-| Hermes | `~/.hermes/skills/jev-loop/` | `hermes mcp add` |
+| Claude Code | `~/.claude/skills/jev/` | `claude mcp add` |
+| Codex | `~/.agents/skills/jev/` | `codex mcp add` (`~/.codex/config.toml`) |
+| Hermes | `~/.hermes/skills/jev/` | `hermes mcp add` |
 
 The installer finishes with `jev_mcp.py --check`, a tiny live call to Jev that shows
 dependencies, key and network work. To update: `git pull` and run the installer again.
@@ -49,10 +49,34 @@ Restart the harness, then just say what you want built:
 
 > build with jev: a small tool that renames my photos by capture date
 
-or invoke the skill directly: `/jev-loop` (Claude Code), `$jev-loop` or `/skills`
+or invoke the skill directly: `/jev` (Claude Code), `$jev` or `/skills`
 (Codex). The skill asks a few concrete questions (folder, language, how to test it,
 size), writes the acceptance criteria and `goal.json` for you, shows a summary and runs
 the loop when you say go.
+
+## One skill, three parts
+
+The installed `jev` skill combines **Loop** (goal, execution, checks and independent
+review), **Route** (Jev selects the model tier, skill and delegation for each task),
+and **Git** (Jev proposes commit, push or PR behind deterministic publishing rules).
+Say `jev`, `jev-loop`, `jev-route` or `jev-git`; they all use the same skill.
+The MCP server remains named `jev-loop`.
+
+`route.py` and `git_decide.py` live next to `SKILL.md` and use only Python's standard
+library. Both read the same TypeSafe key as the server. Claude's model tiers map to
+available models in Codex and Hermes; when delegation is unavailable, the harness
+runs in-session and reports that fallback. Reviews use the main model or stronger.
+
+The installers copy the entire skill directory and migrate recognized legacy skills:
+`jev-loop` for each harness, plus `jev-route` and `jev-git` for Claude Code. A legacy
+folder is removed only when its SKILL.md frontmatter identifies that exact skill;
+custom folders with different names in frontmatter are preserved.
+
+Git's private per-repository rules live outside repositories in
+`~/.config/jev-git/policies/*.json`. Protected branches block direct publishing by
+default. A trusted local policy can adapt that rule to a repository's documented
+release workflow; secret, identity and review checks still apply. A recommendation
+never grants permission to publish beyond the user's authorized scope.
 
 ## How a turn runs
 

@@ -22,9 +22,7 @@ fi
 .venv/bin/python -m pip install -q -r requirements.txt
 
 if command -v claude >/dev/null 2>&1; then
-  mkdir -p "$HOME/.claude/skills/jev-loop"
-  cp skill/jev-loop/SKILL.md "$HOME/.claude/skills/jev-loop/SKILL.md"
-  echo "Skill installed: $HOME/.claude/skills/jev-loop"
+  .venv/bin/python install_skill.py skill/jev "$HOME/.claude/skills" --legacy jev-loop jev-route jev-git
 
   claude mcp remove jev-loop --scope user >/dev/null 2>&1 || true
   claude mcp add jev-loop --scope user -- "$ROOT/.venv/bin/python" "$ROOT/jev_mcp.py"
@@ -36,9 +34,7 @@ fi
 # Codex: the skill is read from ~/.agents/skills (the shared agent-skills location), and
 # the server is registered in ~/.codex/config.toml.
 if command -v codex >/dev/null 2>&1; then
-  mkdir -p "$HOME/.agents/skills/jev-loop"
-  cp -R skill/jev-loop/. "$HOME/.agents/skills/jev-loop/"
-  echo "Skill installed: $HOME/.agents/skills/jev-loop"
+  .venv/bin/python install_skill.py skill/jev "$HOME/.agents/skills" --legacy jev-loop
 
   codex mcp remove jev-loop >/dev/null 2>&1 || true
   codex mcp add jev-loop -- "$ROOT/.venv/bin/python" "$ROOT/jev_mcp.py"
@@ -50,9 +46,7 @@ fi
 # Hermes: same server, same loop; the tools show up as mcp_jev_loop_*.
 if command -v hermes >/dev/null 2>&1; then
   HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
-  mkdir -p "$HERMES_HOME/skills/jev-loop"
-  cp skill/jev-loop/SKILL.md "$HERMES_HOME/skills/jev-loop/SKILL.md"
-  echo "Skill installed: $HERMES_HOME/skills/jev-loop"
+  .venv/bin/python install_skill.py skill/jev "$HERMES_HOME/skills" --legacy jev-loop
 
   # A Hermes stdio MCP subprocess gets a filtered environment, so the key is handed over in
   # the server's env block - but ONLY when Hermes can resolve it: an unresolved

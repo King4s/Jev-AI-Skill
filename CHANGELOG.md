@@ -5,6 +5,20 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Added
+- One harness-neutral `jev` skill combining the build loop, model/skill routing and
+  guarded Git decisions, with standard-library Python helpers and offline tests.
+
+### Changed
+- Install the full `skill/jev/` directory for Claude Code, Codex and Hermes, and
+  remove recognized legacy skills without deleting unrelated custom skills.
+- Keep the MCP server name `jev-loop` and private Git policies outside repositories.
+
+### Fixed
+- Scan outgoing Git history against the actual origin branch rather than an unrelated
+  tracking branch; reject unsupported fetch/push destination mismatches.
+- Include merge-resolution changes in the outgoing secret and private-pattern scan.
+
 ## [2026.09.26.0313] - 2026-09-26
 
 ### Added

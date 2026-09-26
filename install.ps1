@@ -6,10 +6,9 @@ Set-Location $PSScriptRoot
 
 python -m pip install -q -r requirements.txt
 
-$skillDir = Join-Path $HOME ".claude\skills\jev-loop"
-New-Item -ItemType Directory -Force $skillDir | Out-Null
-Copy-Item skill\jev-loop\SKILL.md $skillDir -Force
-Write-Host "Skill installed: $skillDir"
+$skillRoot = Join-Path $HOME ".claude\skills"
+python install_skill.py skill/jev $skillRoot --legacy jev-loop jev-route jev-git
+if ($LASTEXITCODE -ne 0) { throw "Claude Code skill installation failed." }
 
 $server = Join-Path $PSScriptRoot "jev_mcp.py"
 if (Get-Command claude -ErrorAction SilentlyContinue) {
@@ -22,10 +21,9 @@ if (Get-Command claude -ErrorAction SilentlyContinue) {
 
 # Codex: skills live in ~/.agents/skills, the server in ~/.codex/config.toml.
 if (Get-Command codex -ErrorAction SilentlyContinue) {
-    $codexSkillDir = Join-Path $HOME ".agents\skills\jev-loop"
-    New-Item -ItemType Directory -Force $codexSkillDir | Out-Null
-    Copy-Item skill\jev-loop\* $codexSkillDir -Recurse -Force
-    Write-Host "Skill installed: $codexSkillDir"
+    $codexSkillRoot = Join-Path $HOME ".agents\skills"
+    python install_skill.py skill/jev $codexSkillRoot --legacy jev-loop
+    if ($LASTEXITCODE -ne 0) { throw "Codex skill installation failed." }
 
     codex mcp remove jev-loop 2>$null | Out-Null
     codex mcp add jev-loop -- python $server
@@ -37,10 +35,9 @@ if (Get-Command codex -ErrorAction SilentlyContinue) {
 # Hermes: same server, same loop; the tools show up as mcp_jev_loop_*.
 if (Get-Command hermes -ErrorAction SilentlyContinue) {
     $hermesHome = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { Join-Path $HOME ".hermes" }
-    $hermesSkillDir = Join-Path $hermesHome "skills\jev-loop"
-    New-Item -ItemType Directory -Force $hermesSkillDir | Out-Null
-    Copy-Item skill\jev-loop\* $hermesSkillDir -Recurse -Force
-    Write-Host "Skill installed: $hermesSkillDir"
+    $hermesSkillRoot = Join-Path $hermesHome "skills"
+    python install_skill.py skill/jev $hermesSkillRoot --legacy jev-loop
+    if ($LASTEXITCODE -ne 0) { throw "Hermes skill installation failed." }
 
     # A Hermes stdio MCP subprocess gets a filtered environment, so the key is handed over in
     # the server's env block - but ONLY when Hermes can resolve it: an unresolved
@@ -64,4 +61,4 @@ if (-not [Environment]::GetEnvironmentVariable("TYPESAFE_API_KEY", "User") -and 
 } else {
     python $server --check
 }
-Write-Host "Done. Restart your harness (Claude Code / Codex), then say: 'byg med jev: <what you want>' or invoke the jev-loop skill (/jev-loop, or `$jev-loop in Codex)."
+Write-Host "Done. Restart your harness (Claude Code / Codex), then say: 'byg med jev: <what you want>' or invoke the jev skill (/jev, or `$jev in Codex)."

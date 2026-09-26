@@ -12,11 +12,14 @@ and answer them in Danish.
   decides route / done / recovery; the server runs checks, hard stops and the tape.
   The client harness (Claude Code / Codex / Hermes) is the executor. Run state:
   `runs/<id>.state.json`, tape: `runs/<id>.jsonl`.
-- `skill/jev-loop/SKILL.md` - the harness-neutral skill (interview -> goal.json -> loop).
-  One file, all harnesses: tool names are given per harness inline (`clarify` vs
+- `skill/jev/SKILL.md` - the harness-neutral skill (interview -> goal.json -> loop).
+  Three parts: Loop, Route and Git. The standard-library helpers `route.py` and
+  `git_decide.py` live alongside SKILL.md; private Git policies stay in
+  `~/.config/jev-git/policies/`, never in the repository.
+  One skill, all harnesses: tool names are given per harness inline (`clarify` vs
   `AskUserQuestion` vs plain chat, `delegate_task` vs the `general-purpose` agent vs
-  `codex exec`). Installed copies: `~/.claude/skills/jev-loop/` (Claude Code),
-  `~/.agents/skills/jev-loop/` (Codex) and `~/.hermes/skills/jev-loop/` (Hermes);
+  `codex exec`). Installed copies: `~/.claude/skills/jev/` (Claude Code),
+  `~/.agents/skills/jev/` (Codex) and `~/.hermes/skills/jev/` (Hermes);
   both installers sync them.
 - `loop.py` - older standalone variant (executor/reviewer via OpenRouter). Secondary.
 - `tests/test_jev_mcp.py` - protocol tests with Jev mocked. No network, no key needed.
@@ -56,10 +59,10 @@ copy; Hermes reads its own clone in `/home/hermes/jev-loop`.
 
 1. Make the change. Keep `jev_mcp.py` the source of truth for loop behaviour.
 2. `python -m pytest -q tests` must pass. Add a test for new protocol behaviour.
-3. If you changed `skill/jev-loop/SKILL.md`, sync the installed copies: run `./install.sh`
+3. If you changed `skill/jev/SKILL.md`, sync the installed copies: run `./install.sh`
    and/or `.\install.ps1` (both are safe to re-run; each syncs the skill and registers the
-   server). The copies live in `~/.claude/skills/jev-loop/`, `~/.agents/skills/jev-loop/`
-   and `~/.hermes/skills/jev-loop/`.
+   server). The copies live in `~/.claude/skills/jev/`, `~/.agents/skills/jev/`
+   and `~/.hermes/skills/jev/`.
 4. Add a line under `## [Unreleased]` in `CHANGELOG.md` (English, sections
    `Added` / `Changed` / `Fixed`). Everything in the repo and on GitHub (docs, changelog,
    release notes, comments, commit messages) is in English; only replies to the owner are Danish.

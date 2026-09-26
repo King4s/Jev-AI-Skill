@@ -1,9 +1,11 @@
 ---
-name: jev-loop
-description: Build something with the Jev-driven build loop - interview the user, write the goal file for them, then run it (TypeSafe's Jev decides which role works next and when to stop; Claude Code, Codex or Hermes does the work; a subagent reviews). Use when the user says "jev", "jev-loop", "kør loopen", "byg ... med jev", "lad Jev styre", or invokes /jev-loop - with or without a goal file or path. The user never has to remember paths or the goal format.
+name: jev
+description: One Jev skill for Claude Code, Codex and Hermes - build with Loop, choose model/skill/subagent with Route, and decide Git steps behind hard rules. Triggers include jev, jev-loop, kør loopen, byg med jev, lad Jev styre, jev-route, lad Jev vælge, jev-git and skal det pushes.
 ---
 
-# jev-loop
+# jev
+
+## Loop
 
 The user should only have to say *what* they want. You work out the rest by asking
 a few good questions, write the goal file yourself, and run the loop.
@@ -22,7 +24,7 @@ What you need, and good defaults:
 
 1. **What to build** - one sentence goal. Rewrite vague wishes into a concrete, testable goal.
 2. **Where** - project folder. Default: a new folder for this project next to where the user
-   keeps projects (Windows: `F:\AI-Projekter\<short-name>`; otherwise the current working
+   keeps projects (use the current working
    directory). If the folder already has code, the loop continues from it.
 3. **Language / stack** - infer from the goal or existing files; ask only if unclear
    (e.g. Python / Node-TypeScript / other).
@@ -141,15 +143,104 @@ or `.\install.ps1` (Windows). Both install dependencies, sync this skill and reg
 
 | Harness | Skill | MCP |
 | --- | --- | --- |
-| Claude Code | `~/.claude/skills/jev-loop/` | `claude mcp add` |
-| Codex | `~/.agents/skills/jev-loop/` | `codex mcp add` (`~/.codex/config.toml`) |
-| Hermes | `~/.hermes/skills/jev-loop/` | `hermes mcp add` |
+| Claude Code | `~/.claude/skills/jev/` | `claude mcp add` |
+| Codex | `~/.agents/skills/jev/` | `codex mcp add` (`~/.codex/config.toml`) |
+| Hermes | `~/.hermes/skills/jev/` | `hermes mcp add` |
 
 Then restart the harness / start a new session. In Codex, the skill is invoked with
-`/skills` or `$jev-loop` (and it also triggers on the description).
+`/skills` or `$jev` (and it also triggers on the description).
 
 The TypeSafe key goes in the environment as `TYPESAFE_API_KEY` or in
 `~/.config/jev-loop/typesafe_api_key` (mode 600); the server reads both. In Hermes the key
 must be in the key file, or in `~/.hermes/.env` so the server's `env` block can resolve it -
 a stdio MCP subprocess does not inherit your shell. Checks run model-written code in a
 shell - for untrusted goals prefer a VM or container.
+
+
+## Route
+
+Jev chooses the next task's model tier, skill and delegation via `route.py` beside
+this SKILL.md. The ordered capability tiers are `haiku < sonnet < opus < fable`;
+Jev's importance judgment bumps the selected tier once, capped at fable. These are
+policy labels, not model IDs. Map them to the current harness's available cheap,
+standard, strong and strongest models. Use only model identifiers exposed by that
+harness; if no stronger model exists, use its strongest available model and explain
+the limitation. When model selection/delegation is unavailable, run in-session and
+state the fallback. Do not invent a model named fable.
+
+Run `python <this-skill-directory>/route.py <request.json>` (or `python3`). Supply:
+
+```json
+{"task": "Next concrete task and done criteria", "context": "Relevant constraints",
+ "skills": {"available-skill": "One-line description"}, "main_model": "opus", "review": false}
+```
+
+`main_model` is the main session's mapped **tier**. Shortlist 3-12 relevant available
+skills, or an empty object if none applies. Read the chosen skill before execution.
+The JSON output contains `model`, `skill`, `subagent`, `reason` and `raw` probabilities.
+Below the skill probability threshold, `skill` becomes `none`. Show one concise
+routing line and apply the decision, unless the user requested advice only.
+
+Any model different from the main session's runs as a subagent, including stronger
+models. Use the harness's agent/delegation tool (Claude Code Agent, Codex subagent,
+Hermes delegate_task) with a self-contained brief, paths, constraints and criteria.
+When available, use a fresh context for independent review; send `"review": true`
+so the script enforces a reviewer at least as strong as the main session's tier and
+requires delegation. Check the actual mapped review model is also at least as strong.
+Keep user conversation in the main session. Never delegate destructive/publishing
+steps or final review to the cheapest tier. User-specified models, skills and
+instructions to work in-session take priority over routing.
+
+For coding tasks use Loop above as the outer workflow. At every `execute`, route
+the role/brief plus failing checks and reviewer findings with that role's relevant
+skills, execute one turn, then record it. On `review`, use the review flag and an
+independent context. Keep the loop server responsible for checks and transitions.
+An API/key failure may fall back to disclosed judgment for Route only; never use
+that fallback to bypass the Loop server or Git hard rules.
+
+## Git
+
+After completed work, `git_decide.py` beside this SKILL.md gathers repository facts,
+asks Jev for the next step, and enforces hard rules. This selects a step within the
+user's existing authorization; invocation alone does not authorize publishing,
+history rewriting or unrelated changes. Act directly when already authorized.
+
+Run `python <this-skill-directory>/git_decide.py --repo <workdir> --summary "State of work"`
+and add `--reviewed` only after independent approval, `--checks-green` only with
+passing checks for the current work. `--scan-only` inspects facts/blocks without
+calling Jev. Output includes `action`, `blocked`, `commands`, `argv`, `reason`, `facts`, `raw`.
+`commands` contains POSIX-quoted display guidance only: never evaluate it as shell
+code. Use `argv` as literal subprocess arguments with shell execution disabled;
+fill commit/PR placeholders and split the finished file list into separate arguments.
+Pass the PR body through the indicated body file.
+
+- `none`: report the reason briefly.
+- `commit`: stage only finished files, use a clear message and required attribution.
+- `push_branch`: push the named branch to origin when authorized.
+- `open_pr`: push and create the PR with changes and validation in its description;
+  follow harness rules for attaching the PR. Never infer authorization to merge.
+
+Hard rules block outward actions on protected branches (default main/master), on
+blocked commits, disallowed author/committer identities, private regex matches or
+suspected secrets. No force push, `--all` or `--mirror`. A PR requires both review
+and green checks; otherwise the decision is reduced to a branch push. Existing open
+PRs are updated by push. If `p_needs_user >= 0.5`, the outward step is skipped: ask
+for the concrete owner decision, never treat elapsed time as permission.
+
+Fix blocks only within the authorized scope, then rescan. Stop and explain blocks
+that require rewriting pushed/other people's history or changing private policy.
+An API error is a failed decision, never permission to publish.
+
+Private policies live ONLY in `~/.config/jev-git/policies/*.json`, outside this repo:
+
+```json
+{"remote": "github.com/<owner>/<repo>", "protected_branches": ["main", "master"],
+ "allowed_author_emails": [], "blocked_shas": [], "blocked_patterns": [], "notes": ""}
+```
+
+Remote matching is exact after canonical SSH/HTTPS normalization. Without a policy,
+generic rules and the secret scan apply. Existing repository/user rules can justify
+a specific local policy (including protected branches); do not relax policy merely
+to make a blocked action succeed. Never commit private policies or identifiers.
+Both helpers use only Python's standard library and read `TYPESAFE_API_KEY` or
+`~/.config/jev-loop/typesafe_api_key`; neither helper performs Git mutations itself.

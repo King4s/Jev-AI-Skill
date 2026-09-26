@@ -26,6 +26,7 @@ def test_install_ps1_parses():
 
 def test_install_ps1_sets_up_codex():
     text = PS1.read_text(encoding="utf-8")
-    assert ".agents\\skills\\jev-loop" in text, "Codex skill location missing"
+    assert 'install_skill.py skill/jev $codexSkillRoot --legacy jev-loop' in text, "Codex skill installation command missing"
+    assert '.agents\\skills' in text, "Codex skill location missing"
     assert "codex mcp add jev-loop" in text, "Codex MCP registration missing"
     assert "claude mcp add jev-loop" in text, "Claude Code registration was lost"

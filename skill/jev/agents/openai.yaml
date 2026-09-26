@@ -1,7 +1,7 @@
 interface:
-  display_name: "jev-loop"
-  short_description: "Jev decides, the harness builds, a subagent reviews - decision-driven build loop"
-  default_prompt: "byg med jev: "
+  display_name: "jev"
+  short_description: "Jev selects build turns, model routing and safe Git steps"
+  default_prompt: "Use $jev to build, route or decide the next Git step."
 policy:
   allow_implicit_invocation: true
 dependencies:

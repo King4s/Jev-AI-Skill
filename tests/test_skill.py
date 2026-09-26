@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-SKILL = Path(__file__).resolve().parents[1] / "skill" / "jev-loop" / "SKILL.md"
+SKILL = Path(__file__).resolve().parents[1] / "skill" / "jev" / "SKILL.md"
 
 
 @pytest.fixture(scope="module")
@@ -23,7 +23,7 @@ def frontmatter():
 
 
 def test_frontmatter_is_within_codex_limits(frontmatter):
-    assert frontmatter["name"] == "jev-loop"
+    assert frontmatter["name"] == "jev"
     assert len(frontmatter["name"]) <= 100
     assert len(frontmatter["description"]) <= 500, "over 500 chars: Codex skips the skill"
     assert frontmatter["description"]

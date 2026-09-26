@@ -5,6 +5,7 @@ The real script runs in a sandbox HOME with stubbed harness CLIs (`codex`, `clau
 the machine running the tests. POSIX only - install.sh is a shell script.
 """
 import shutil
+import shlex
 import stat
 import subprocess
 import sys
@@ -29,9 +30,22 @@ def sandbox(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
     shutil.copy(ROOT / "install.sh", tmp_path / "install.sh")
+    shutil.copy(ROOT / "install_skill.py", tmp_path / "install_skill.py")
     shutil.copytree(ROOT / "skill", tmp_path / "skill")
     log = tmp_path / "calls.log"
-    _stub(tmp_path / ".venv" / "bin" / "python", log)
+    venv_python = tmp_path / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True, exist_ok=True)
+    real_python = shlex.quote(sys.executable)
+    venv_python.write_text(
+        "#!/bin/sh\n"
+        'case "$1" in\n'
+        f'  install_skill.py) exec {real_python} "$@" ;;\n'
+        '  -m) exit 0 ;;\n'
+        '  jev_mcp.py) exit 0 ;;\n'
+        'esac\n'
+        'exit 0\n', encoding="utf-8"
+    )
+    venv_python.chmod(venv_python.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
     for cli in ("codex", "claude", "hermes"):
         _stub(tmp_path / "bin" / cli, log)
     return tmp_path, home, log
@@ -51,7 +65,7 @@ def test_skill_and_mcp_server_are_installed_for_codex(sandbox):
     r, calls = run(tmp_path, home, log)
 
     assert r.returncode == 0, r.stderr
-    skill = home / ".agents" / "skills" / "jev-loop"
+    skill = home / ".agents" / "skills" / "jev"
     assert (skill / "SKILL.md").is_file()
     assert (skill / "agents" / "openai.yaml").is_file(), "Codex skill metadata missing"
 
@@ -72,3 +86,22 @@ def test_missing_codex_is_not_an_error(sandbox):
     assert "claude mcp add jev-loop" in calls
     assert "hermes mcp add jev-loop" in calls
     assert not (home / ".agents").exists()
+
+
+def test_installer_migrates_legacy_skills_for_all_harnesses(sandbox):
+    tmp_path, home, log = sandbox
+    legacy_dirs = []
+    for harness in (".agents", ".claude", ".hermes"):
+        names = ("jev-loop", "jev-route", "jev-git") if harness == ".claude" else ("jev-loop",)
+        for name in names:
+            old = home / harness / "skills" / name
+            old.mkdir(parents=True)
+            (old / "SKILL.md").write_text(f"---\nname: {name}\n---\n", encoding="utf-8")
+            legacy_dirs.append(old)
+    result, _ = run(tmp_path, home, log)
+    assert result.returncode == 0, result.stderr
+    assert all(not old.exists() for old in legacy_dirs)
+    for harness in (".agents", ".claude", ".hermes"):
+        installed = home / harness / "skills" / "jev"
+        for relative in ("SKILL.md", "route.py", "git_decide.py", "agents/openai.yaml"):
+            assert (installed / relative).read_bytes() == (ROOT / "skill" / "jev" / relative).read_bytes()
