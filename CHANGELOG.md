@@ -5,6 +5,8 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+## [2026.09.26.2347] - 2026-09-26
+
 ### Added
 - One harness-neutral `jev` skill combining the build loop, model/skill routing and
   guarded Git decisions, with standard-library Python helpers and offline tests.
