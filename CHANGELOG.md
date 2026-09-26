@@ -5,6 +5,9 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Added
+- Add the project banner to the README.
+
 ## [2026.09.27.0041] - 2026-09-27
 
 ### Changed
