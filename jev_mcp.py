@@ -1,16 +1,16 @@
-"""jev-loop as an MCP server: Jev decides, the harness (Claude Code / Codex / Hermes) does the work.
+"""Jev's Loop capability, exposed through the ``jev-loop`` MCP server.
 
-The server owns the parts that must not depend on the executor's judgement:
-Jev's decisions (route / done / recovery), running the checks, the hard stops
-and the decision tape. The client harness (driven by the jev-loop skill)
-writes the code and runs the review.
+The harness uses the installed ``jev`` skill to execute work and request an independent
+review. The server asks Jev for routing, completion and recovery decisions, runs configured
+checks, enforces stop conditions and records run state and a decision tape. Route and Git
+are separate skill helpers, not MCP tools.
 
 Protocol per turn:
   loop_decide        -> next = "execute" | "review" | "stop"
   (review)           -> loop_record_review -> next = "execute" | "stop"
   (execute role)     -> loop_record_turn   -> checks run, then loop_decide again
 
-Needs TYPESAFE_API_KEY in the environment.
+Needs ``TYPESAFE_API_KEY`` in the environment or ``~/.config/jev-loop/typesafe_api_key``.
 Run:   python jev_mcp.py            (stdio MCP server)
 """
 import json
@@ -398,7 +398,7 @@ def build_server():
     from mcp.server.mcpserver import MCPServer
 
     mcp = MCPServer("jev-loop", version=VERSION, instructions=(
-        "Jev-driven build loop. Use with the jev-loop skill. Call loop_start, then repeat "
+        "Jev Loop server for the installed jev skill. Call loop_start, then repeat "
         "loop_decide -> (review -> loop_record_review) -> execute -> loop_record_turn "
         "until a response has next='stop'. Never skip a step or invent a decision."))
 
@@ -410,8 +410,10 @@ def build_server():
 
     @mcp.tool()
     def loop_start(goal_path: str) -> dict:
-        """Start a run from a goal JSON file (goal, acceptance, workdir, checks, roles...).
-        Runs the checks once and returns the run_id. Next: loop_decide."""
+        """Start a Jev Loop run from its goal JSON file and run checks once.
+
+        Use with the installed jev skill. Returns the run_id; next call loop_decide.
+        """
         def go():
             run = Run.create(goal_path)
             c = run.cfg

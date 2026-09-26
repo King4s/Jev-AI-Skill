@@ -1,6 +1,6 @@
 ---
 name: jev
-description: One Jev skill for Claude Code, Codex and Hermes - build with Loop, choose model/skill/subagent with Route, and decide Git steps behind hard rules. Triggers include jev, jev-loop, kør loopen, byg med jev, lad Jev styre, jev-route, lad Jev vælge, jev-git and skal det pushes.
+description: Jev is one skill for Claude Code, Codex and Hermes with three capabilities — Loop for execution and review, Route for model/skill/delegation choices, and Git for guarded repository steps. Triggers include jev, jev-loop, kør loopen, byg med jev, lad Jev styre, jev-route, lad Jev vælge, jev-git and skal det pushes.
 ---
 
 # jev
@@ -14,11 +14,11 @@ Talk to the user in their language (usually Danish).
 ## Phase 1 - Interview (skip what you already know)
 
 Pull everything you can from the user's message and the current directory first.
-Then ask only what is still unknown, in ONE structured question call (max 4-5 questions,
-concrete options with a recommended default first; the user can always pick "Other").
-Use `clarify` in Hermes, `AskUserQuestion` in Claude Code; in Codex, ask in plain chat
-(it has no question tool by default) and keep it to one short list of questions.
-If *what to build* is completely missing, ask that first in plain chat.
+Then ask only what is still unknown. Use an available structured question tool when the
+harness provides one; otherwise ask clearly in chat. Keep questions concrete and concise,
+with a recommended default where useful. If *what to build* is completely missing, ask
+that first. Harness tool availability changes, so check the tools actually exposed in the
+current session rather than assuming a fixed question or delegation tool.
 
 What you need, and good defaults:
 
@@ -65,12 +65,14 @@ Write `<project folder>\goal.json`:
 Adapt roles only if the task clearly needs it (e.g. a `docs` or `ui` role, each with a
 clear `when`). `workdir` "." = the project folder itself.
 
-Show the user a short summary (goal, criteria as bullets, checks, folder, size) and ask
-for a go with the same question tool ("Go" / "Change something", in the user's language). Apply corrections, then start.
-If the user said to just go, skip the confirmation.
+Show a short summary (goal, criteria, checks, folder and size) before starting. Ask for a
+go only when the user has not already authorized the work. Apply any corrections, then
+start. Preserve explicit authorization from the current conversation; do not ask again
+just because this phase normally has a confirmation step.
 
-If a `goal.json` already exists in the folder, ask whether to reuse it, continue an
-unfinished run (`loop_status`), or write a new one.
+If a `goal.json` already exists, inspect it and any run state. Continue or reuse it when
+that matches the user's request; ask only when choosing between materially different goals
+would affect the work.
 
 ## Phase 3 - Run the loop
 
@@ -89,9 +91,10 @@ in Claude Code and Codex they come from the `jev-loop` MCP server as `loop_start
      `loop_record_turn(run_id, notes, files, executor_ok)` - `notes` is 1-2 honest
      sentences, `files` relative to `workdir`, `executor_ok=false` if you could not do
      the step. Don't run the configured checks yourself; the server does.
-   - **`review`**: get an independent review in a context that cannot see your reasoning:
-     `delegate_task` in Hermes, the `general-purpose` Task agent in Claude Code, or a
-     fresh read-only process in Codex:
+   - **`review`**: get an independent review in a context that cannot see your reasoning,
+     using a review/delegation tool actually available in the harness. Examples include a
+     delegated task in Hermes, an independent agent in Claude Code, or a fresh read-only
+     Codex process where `codex exec` is available:
      `codex exec -s read-only -C <workdir> -o verdict.json "<review prompt>"` - a new
      process with no shared context, which cannot edit files; the verdict lands in
      `verdict.json` so it can be passed on unchanged. Give it the goal, acceptance
@@ -124,12 +127,10 @@ reviewer are worth knowing, because a run can sit in `execute` with nothing left
 - Keep `notes` short and lead with the change and its evidence, not the story: Jev sees
   only the first `NOTE_CHARS` (600) characters of each note, and the state is built to
   keep him away from everything else.
-- When a subagent builds a copy of this repo, give it a **fresh** target directory - and
-  remember the copy's own `.cargo/config.toml` counts too. This project's config names a
-  shared `target-dir`, so any `cargo` call that does not set `CARGO_TARGET_DIR` writes
-  there. A copy of older source writing shared artifacts is how a workspace test came to
-  fail against a guard that existed, while `-p opticore --test` - a different unit -
-  passed, which reads exactly like a flaky test and is not.
+- When multiple agents build separate copies of a project concurrently, check whether
+  their build configuration points to a shared output directory. Give each copy an
+  isolated build directory when needed to prevent stale or cross-version artifacts from
+  making checks misleading.
 
 If a tool returns `{"error": ...}`, fix the cause and retry that call; never bypass the
 server. If the `jev-loop` tools are missing, tell the user to restart the harness so it
@@ -137,24 +138,28 @@ picks up the new MCP server (setup below).
 
 ## Setup (once)
 
-From a clone of https://github.com/King4s/jev-loop run `./install.sh` (Linux, macOS, WSL)
-or `.\install.ps1` (Windows). Both install dependencies, sync this skill and register the
-`jev-loop` MCP server for every harness they find on PATH:
+From a clone of https://github.com/King4s/jev run `./install.sh` (Linux, macOS, WSL) or
+`.\install.ps1` (Windows). Both install dependencies, sync this skill and register the
+`jev-loop` MCP server for harness CLIs they find on PATH. Windows always copies the skill
+to Claude Code's user skill directory; Claude MCP registration is conditional. Codex and
+Hermes setup is conditional. POSIX setup is conditional for all three harnesses:
 
 | Harness | Skill | MCP |
 | --- | --- | --- |
 | Claude Code | `~/.claude/skills/jev/` | `claude mcp add` |
 | Codex | `~/.agents/skills/jev/` | `codex mcp add` (`~/.codex/config.toml`) |
-| Hermes | `~/.hermes/skills/jev/` | `hermes mcp add` |
+| Hermes | `$HERMES_HOME/skills/jev/`, or `~/.hermes/skills/jev/` | `hermes mcp add` |
 
 Then restart the harness / start a new session. In Codex, the skill is invoked with
 `/skills` or `$jev` (and it also triggers on the description).
 
 The TypeSafe key goes in the environment as `TYPESAFE_API_KEY` or in
-`~/.config/jev-loop/typesafe_api_key` (mode 600); the server reads both. In Hermes the key
-must be in the key file, or in `~/.hermes/.env` so the server's `env` block can resolve it -
-a stdio MCP subprocess does not inherit your shell. Checks run model-written code in a
-shell - for untrusted goals prefer a VM or container.
+`~/.config/jev-loop/typesafe_api_key`; the server and helpers read both. In Hermes, the
+installer references the environment key only if `$HERMES_HOME/.env` (or `~/.hermes/.env`)
+contains it. Otherwise the server reads the key file. The POSIX installer creates a
+repository-local `.venv`; Windows uses `python` from PATH. Installers run a live server
+check when a key is available. Checks execute shell commands from the goal file; use an
+isolated environment for untrusted projects.
 
 
 ## Route
@@ -162,17 +167,15 @@ shell - for untrusted goals prefer a VM or container.
 Jev chooses the next task's model tier, skill and delegation via `route.py` beside
 this SKILL.md. The ordered capability tiers are `haiku < sonnet < opus < fable`;
 Jev's importance judgment bumps the selected tier once, capped at fable. These are
-policy labels, not model IDs. Map them to the current harness's available cheap,
-standard, strong and strongest models. Use only model identifiers exposed by that
-harness; if no stronger model exists, use its strongest available model and explain
-the limitation. When model selection/delegation is unavailable, run in-session and
-state the fallback. Do not invent a model named fable.
+capability labels, not model IDs. Map them to models exposed by the current harness.
+If a model or delegation feature is unavailable, state the limitation and use a suitable
+in-session fallback when possible. Do not invent a model named fable.
 
 Run `python <this-skill-directory>/route.py <request.json>` (or `python3`). Supply:
 
 ```json
 {"task": "Next concrete task and done criteria", "context": "Relevant constraints",
- "skills": {"available-skill": "One-line description"}, "main_model": "opus", "review": false}
+ "skills": {"available-skill": "One-line description"}, "main_model": "sonnet", "review": false}
 ```
 
 `main_model` is the main session's mapped **tier**. Shortlist 3-12 relevant available
@@ -181,12 +184,10 @@ The JSON output contains `model`, `skill`, `subagent`, `reason` and `raw` probab
 Below the skill probability threshold, `skill` becomes `none`. Show one concise
 routing line and apply the decision, unless the user requested advice only.
 
-Any model different from the main session's runs as a subagent, including stronger
-models. Use the harness's agent/delegation tool (Claude Code Agent, Codex subagent,
-Hermes delegate_task) with a self-contained brief, paths, constraints and criteria.
-When available, use a fresh context for independent review; send `"review": true`
-so the script enforces a reviewer at least as strong as the main session's tier and
-requires delegation. Check the actual mapped review model is also at least as strong.
+Any model mapped to a different model than the main session must run as a subagent. Use
+an available agent/delegation tool with a self-contained brief. For independent review,
+send `"review": true`; the helper requires delegation and raises its selected tier to at
+least the main session tier. Check that the mapped review model meets that level.
 Keep user conversation in the main session. Never delegate destructive/publishing
 steps or final review to the cheapest tier. User-specified models, skills and
 instructions to work in-session take priority over routing.
@@ -224,8 +225,10 @@ Hard rules block outward actions on protected branches (default main/master), on
 blocked commits, disallowed author/committer identities, private regex matches or
 suspected secrets. No force push, `--all` or `--mirror`. A PR requires both review
 and green checks; otherwise the decision is reduced to a branch push. Existing open
-PRs are updated by push. If `p_needs_user >= 0.5`, the outward step is skipped: ask
-for the concrete owner decision, never treat elapsed time as permission.
+PRs are updated by push. If `p_needs_user >= 0.5`, the outward step is skipped. Identify
+the concrete unresolved owner decision only when one is needed; honor explicit
+authorization and decisions already given in the conversation. Never treat elapsed time
+as permission.
 
 Fix blocks only within the authorized scope, then rescan. Stop and explain blocks
 that require rewriting pushed/other people's history or changing private policy.
@@ -239,8 +242,12 @@ Private policies live ONLY in `~/.config/jev-git/policies/*.json`, outside this 
 ```
 
 Remote matching is exact after canonical SSH/HTTPS normalization. Without a policy,
-generic rules and the secret scan apply. Existing repository/user rules can justify
-a specific local policy (including protected branches); do not relax policy merely
-to make a blocked action succeed. Never commit private policies or identifiers.
-Both helpers use only Python's standard library and read `TYPESAFE_API_KEY` or
+generic rules and the heuristic text-pattern scan apply. The scan checks added lines in
+outgoing commits (including merge-parent diffs) and the working-tree diff, plus commit
+subjects; it cannot guarantee that secrets or private data will be detected. Review the
+changes yourself. Existing repository/user rules can justify a specific local policy
+(including protected branches); do not relax policy merely to make a blocked action
+succeed. If a repository is renamed, update its origin and the matching policy's `remote`
+while preserving its rules. Never commit private policies or identifiers. Both helpers
+use only Python's standard library and read `TYPESAFE_API_KEY` or
 `~/.config/jev-loop/typesafe_api_key`; neither helper performs Git mutations itself.

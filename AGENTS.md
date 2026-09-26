@@ -1,94 +1,85 @@
 # AGENTS.md - instructions for AI maintainers
 
-This repository is maintained by AI agents, not by a human. The owner states
-*what* they want in plain language (usually Danish) and never runs commands,
-remembers paths, or edits config by hand. Do the whole job: change, test,
-document, commit, release, push. Ask the owner only for real product decisions,
-and answer them in Danish.
+This repository contains Jev, one installed skill with three capabilities: Loop, Route and
+Git. Keep docs and implementation aligned. Repository docs and source comments are in
+English; answer the owner in their language.
 
-## What this is
+## Components
 
-- `jev_mcp.py` - MCP server (`jev-loop`). Jev (TypeSafe, `api.typesafe.ai/v1/systemone`)
-  decides route / done / recovery; the server runs checks, hard stops and the tape.
-  The client harness (Claude Code / Codex / Hermes) is the executor. Run state:
-  `runs/<id>.state.json`, tape: `runs/<id>.jsonl`.
-- `skill/jev/SKILL.md` - the harness-neutral skill (interview -> goal.json -> loop).
-  Three parts: Loop, Route and Git. The standard-library helpers `route.py` and
-  `git_decide.py` live alongside SKILL.md; private Git policies stay in
-  `~/.config/jev-git/policies/`, never in the repository.
-  One skill, all harnesses: tool names are given per harness inline (`clarify` vs
-  `AskUserQuestion` vs plain chat, `delegate_task` vs the `general-purpose` agent vs
-  `codex exec`). Installed copies: `~/.claude/skills/jev/` (Claude Code),
-  `~/.agents/skills/jev/` (Codex) and `~/.hermes/skills/jev/` (Hermes);
-  both installers sync them.
-- `loop.py` - older standalone variant (executor/reviewer via OpenRouter). Secondary.
-- `tests/test_jev_mcp.py` - protocol tests with Jev mocked. No network, no key needed.
+- `jev_mcp.py` is the `jev-loop` MCP server. Jev provides Loop decisions; the server runs
+  configured checks, enforces stop conditions and records state and a decision tape. The
+  client harness does the work and obtains an independent review. Run state is stored in
+  `runs/<id>.state.json`; the tape is `runs/<id>.jsonl`.
+- `skill/jev/SKILL.md` is the shared skill for Loop, Route and Git. Its standard-library
+  helpers are `route.py` and `git_decide.py` in the same directory. Installed skills use
+  the name `jev`, in the harness-specific skills directory.
+- `loop.py` is a legacy standalone variant using OpenRouter models as executor and
+  reviewer. The MCP Loop is the maintained workflow.
 
-Jev API facts (verified against docs.typesafe.ai/api): response is
-`{"answers": {id: {"type": "choice", "choice", "probabilities", "confidence"} |
-{"type": "noul", "noul": p}}}`. Model `jev-latest`. Read the live docs
-(https://docs.typesafe.ai/llms.txt) before changing questions or parsing.
+The MCP server identity remains `jev-loop`, and the TypeSafe key file remains
+`~/.config/jev-loop/typesafe_api_key`. Git policies are private local files under
+`~/.config/jev-git/policies/`; never put them in the repository. Route returns a model
+tier, skill and delegation recommendation. Git returns repository facts, blocks, display
+guidance and argv vectors. The active harness maps capability tiers to models and carries
+out authorized work. Neither helper launches an agent or mutates Git state.
 
-## Machines
+## API and installer facts
 
-Installed on the owner's machines as a clone in `~/jev-loop` (Linux: venv in `.venv`,
-`install.sh`; Windows: `F:\AI-Projekter\jev-loop`, `install.ps1`). SSH aliases are in the
-Windows machine's `~/.ssh/config`. Installed (2026-09-24): Windows (Gamer), loki, thor, odin,
-mb-pro. Not yet (offline then): tilbud-grok-bot. To update a
-machine: `ssh <host> 'cd ~/jev-loop && git pull -q && ./install.sh'`. The key lives in
-`~/.config/jev-loop/typesafe_api_key` (mode 600); copy it over SSH stdin, never as an argument.
-Health check anywhere: `python jev_mcp.py --check`. On Odin, `mb`'s clone is the working
-copy; Hermes reads its own clone in `/home/hermes/jev-loop`.
+The TypeSafe System One response shape is documented at
+https://docs.typesafe.ai/api: `answers` contains `choice` answers with probabilities and
+confidence, or `noul` answers with a probability. The loop uses `jev-latest`. Consult the
+live docs before changing API questions or response parsing.
 
-## Harness facts
+Both installers copy the complete skill and register `jev-loop` for harness CLIs they
+find. On Windows, `install.ps1` always copies the Claude Code skill, even if `claude` is
+not on PATH; Claude MCP registration is conditional. Codex and Hermes setup is conditional
+on each CLI being available. On POSIX, `install.sh` conditionally sets up Claude Code,
+Codex and Hermes. It creates a repository-local `.venv`; Windows uses `python` from PATH.
+Hermes uses `$HERMES_HOME` when set and otherwise `~/.hermes`. The Hermes installer passes
+`TYPESAFE_API_KEY` through an environment reference only if Hermes' `.env` contains the
+key; otherwise the server reads its key file. A live `--check` runs only when an API key
+is available.
 
-- Hermes drives the same loop through the same server; the tools appear as
-  `mcp_jev_loop_loop_start` etc. (`mcp_<server>_<tool>`).
-- Hermes gives a stdio MCP subprocess a **filtered** environment, so `TYPESAFE_API_KEY`
-  reaches the server only through the `env` block in `mcp_servers.jev-loop`, stored as the
-  literal `${TYPESAFE_API_KEY}` which Hermes resolves from `~/.hermes/.env`. An unresolved
-  placeholder would be sent to Jev as the key, so it is passed only when the key is really
-  there - otherwise the server reads `~/.config/jev-loop/typesafe_api_key` itself.
-  `install.sh` makes that call.
-- `hermes mcp add NAME --command ... [--env K=V] --args ...` is discovery-first and asks
-  "Enable all N tools?". With stdin piped (`printf 'y\n' |`) it is non-interactive, exits 0
-  and writes `enabled: true`; `--args` must be last. `HERMES_HOME` redirects the whole
-  config, so the install path can be tested against a throwaway home.
+## Workflow
+
+- Keep `jev_mcp.py` as the source of truth for MCP Loop behavior.
+- Keep the README, skill instructions, helper docstrings and changelog aligned with code.
+- Do not make Jev's decisions in code or in the skill; the server asks Jev for Loop
+  decisions. Helpers may apply deterministic rules around Jev's recommendation.
+- Do not send raw agent output to Jev; the loop state is compact and structured.
+- Treat `checks` as shell commands that execute in the goal's `workdir`.
+- Do not claim the Git scanner guarantees detection of secrets or private data. It uses
+  heuristic text patterns over outgoing additions and commit subjects.
+- Preserve legacy trigger and migration names where installers recognize them, while
+  keeping the installed skill's canonical name `jev` and MCP server identity `jev-loop`.
+
+The loop's hard stops are `max_turns`, `max_consecutive_failures` and Jev choosing
+`escalate`. A red check by itself is not necessarily a failed turn; see `turn_failed` and
+the protocol in `jev_mcp.py` before changing those semantics.
+
+## Sensitive files
+
+Never add `runs/`, `goal.json`, `workspace/` or API keys to Git. Private policy files and
+machine-specific configuration stay outside the repository.
 
 ## Every change
 
-1. Make the change. Keep `jev_mcp.py` the source of truth for loop behaviour.
-2. `python -m pytest -q tests` must pass. Add a test for new protocol behaviour.
-3. If you changed `skill/jev/SKILL.md`, sync the installed copies: run `./install.sh`
-   and/or `.\install.ps1` (both are safe to re-run; each syncs the skill and registers the
-   server). The copies live in `~/.claude/skills/jev/`, `~/.agents/skills/jev/`
-   and `~/.hermes/skills/jev/`.
-4. Add a line under `## [Unreleased]` in `CHANGELOG.md` (English, sections
-   `Added` / `Changed` / `Fixed`). Everything in the repo and on GitHub (docs, changelog,
-   release notes, comments, commit messages) is in English; only replies to the owner are Danish.
+1. Make the requested change and keep MCP Loop behavior in `jev_mcp.py`.
+2. Run `python -m pytest -q tests`; add protocol tests when behavior changes.
+3. If `skill/jev/SKILL.md` changes, run the applicable installer to sync installed copies.
+4. Add an English entry under `## [Unreleased]` in `CHANGELOG.md`, using `Added`,
+   `Changed` or `Fixed` sections.
 5. Commit with a clear message ending in the agent's `Co-Authored-By` line.
 
 ## Releasing
 
-Versions are date-based: `yyyy.mm.dd.ttmm` (local time, 24h, e.g. `2026.09.24.1422`).
-Release after every meaningful change - there is no human to remember to do it.
+Versions use local date and time: `yyyy.mm.dd.hhmm`. Release meaningful changes with
+`pwsh -File .\release.ps1`. It requires a clean tree and a non-empty `[Unreleased]`
+section, then updates `VERSION` and the changelog, commits, tags, pushes and creates a
+GitHub release. Do not edit `VERSION` by hand.
 
-```powershell
-pwsh -File .\release.ps1
-```
+## Owner-only access
 
-Requires a clean working tree and a non-empty `[Unreleased]` section. It writes
-`VERSION`, moves `[Unreleased]` under the new version in `CHANGELOG.md`, commits,
-tags `v<version>`, pushes and creates the GitHub release. Never edit `VERSION` by hand.
-
-## Things only the owner can do
-
-- GitHub OAuth scope changes (browser device flow). Start `gh auth refresh -s <scope>` in the
-  background and give the owner the one-time code. Git pushes use SSH (`~/.ssh/github_ed25519`).
-- Setting `TYPESAFE_API_KEY` if it is missing.
-
-## Don'ts
-
-- Never commit `runs/`, `goal.json`, `workspace/` or any API key.
-- Don't make Jev's decisions in code or in the skill; the server asks Jev.
-- Don't send raw agent output to Jev; keep its state compact and structured.
+The owner handles TypeSafe API key setup if no key is available and GitHub OAuth scope
+changes that require browser device authorization. Never expose a key in command-line
+arguments; when transferring one, use a protected channel such as SSH stdin.

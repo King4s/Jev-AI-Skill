@@ -1,7 +1,10 @@
-"""jev-loop: Jev decides, an executor model (via OpenRouter) does the work.
+"""Legacy standalone Loop variant: Jev decides while OpenRouter models do the work.
+
+The maintained Loop capability uses the ``jev`` skill and ``jev-loop`` MCP server, with
+the active harness as executor and reviewer. This script remains a separate alternative.
 
 Usage:  python loop.py goal.json
-Needs:  OPENROUTER_API_KEY in the environment, `pip install requests`.
+Needs:  OPENROUTER_API_KEY and TYPESAFE_API_KEY in the environment, `pip install requests`.
 
 Per turn:
   1. Jev (one batched call): route -> which role runs next, done -> p(goal met),

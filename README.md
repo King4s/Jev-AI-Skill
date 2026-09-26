@@ -1,177 +1,189 @@
-# jev-loop
+# Jev
 
-[![tests](https://github.com/King4s/jev-loop/actions/workflows/test.yml/badge.svg)](https://github.com/King4s/jev-loop/actions/workflows/test.yml)
+[![tests](https://github.com/King4s/jev/actions/workflows/test.yml/badge.svg)](https://github.com/King4s/jev/actions/workflows/test.yml)
 
-A build loop where **Jev decides** and **Claude Code, Codex or Hermes does the work**.
+Jev is one installed skill with three capabilities: **Loop** coordinates execution, checks
+and an independent review; **Route** asks Jev to select a model tier, skill and delegation;
+**Git** asks Jev for a repository step and applies deterministic publishing blocks. Jev
+provides judgments through TypeSafe System One. The active client harness (Claude Code,
+Codex or Hermes) performs the work and any approved commands.
 
-[Jev](https://docs.typesafe.ai) (TypeSafe) is a fast decision model that answers with
-typed choices and probabilities instead of text. In jev-loop, Jev decides on every turn:
+The installed skill is named `jev`. The MCP server and its tools keep their existing
+identity, `jev-loop` (`loop_start`, `loop_decide`, `loop_record_turn`,
+`loop_record_review`, `loop_status`). Route and Git are Python helpers, not MCP tools.
+Say `jev`, `jev-loop`, `jev-route` or `jev-git`; these legacy triggers use the same skill.
+The installers migrate recognized old skill folders (`jev-loop`, `jev-route` and
+`jev-git` where configured), removing a folder only when its frontmatter confirms that
+exact legacy skill.
 
-- **route**: which role works next (`build`, `test`, `fix`, ...)
-- **done**: the probability that the goal is met
-- **recovery**: after a failure, whether to retry, switch role or give up
+## Install
 
-Claude Code, Codex or Hermes writes the code. The server runs your checks. An independent
-subagent reviews the work, and **only the review can declare the task done**.
-
-## Getting started
-
-Requires Python 3.11+, a harness - [Claude Code](https://claude.com/claude-code),
-[Codex](https://developers.openai.com/codex) or
-[Hermes](https://hermes-agent.nousresearch.com) - and a
-[TypeSafe API key](https://docs.typesafe.ai), either in the `TYPESAFE_API_KEY` environment
-variable or in the file `~/.config/jev-loop/typesafe_api_key` (readable only by you).
+Requires Python 3.11+, at least one supported harness, and a TypeSafe API key. Set
+`TYPESAFE_API_KEY` or store it in `~/.config/jev-loop/typesafe_api_key`.
 
 ```powershell
 # Windows
-git clone https://github.com/King4s/jev-loop.git; cd jev-loop; .\install.ps1
+git clone https://github.com/King4s/jev.git; cd jev; .\install.ps1
 ```
 
 ```bash
-# Linux / macOS / WSL (creates a venv inside the repo)
-git clone https://github.com/King4s/jev-loop.git ~/jev-loop && ~/jev-loop/install.sh
+# Linux, macOS or WSL
+git clone https://github.com/King4s/jev.git ~/jev && ~/jev/install.sh
 ```
 
-The installers set up every harness they find on PATH:
+On Windows, `install.ps1` always copies the skill to Claude Code's
+`~/.claude/skills/jev/`; it registers Claude's MCP server only if `claude` is on PATH.
+Codex and Hermes skill copies and MCP registration are conditional on their CLI being on
+PATH. On Linux, macOS and WSL, `install.sh` conditionally copies the skill and registers
+the server for each CLI it finds (`claude`, `codex`, `hermes`). The POSIX installer creates
+a repository-local `.venv`; the Windows installer uses `python` from PATH. Both install
+Python dependencies. Hermes uses `$HERMES_HOME` when set, otherwise `~/.hermes`, for its
+skill, config and `.env` paths. Both installers run `jev_mcp.py --check` if a key is
+available; otherwise they print a key warning and skip the live check. Restart the harness
+or start a new session after setup. Run the installer again after `git pull` to update.
 
-| Harness | Skill | MCP server |
-| --- | --- | --- |
-| Claude Code | `~/.claude/skills/jev/` | `claude mcp add` |
-| Codex | `~/.agents/skills/jev/` | `codex mcp add` (`~/.codex/config.toml`) |
-| Hermes | `~/.hermes/skills/jev/` | `hermes mcp add` |
+The key file can also be used by the helpers. In Hermes, the installer passes an
+environment reference only when its `.env` contains a `TYPESAFE_API_KEY`; otherwise the
+server reads the key file itself.
 
-The installer finishes with `jev_mcp.py --check`, a tiny live call to Jev that shows
-dependencies, key and network work. To update: `git pull` and run the installer again.
+## Loop
 
-In Hermes the tools are called `mcp_jev_loop_loop_start` etc.; start a new session afterwards.
-In Claude Code and Codex the tools come from the `jev-loop` server as `loop_start` etc.
-Restart the harness, then just say what you want built:
+Say what you want built, or invoke the `jev` skill (`/jev` in Claude Code, `$jev` or
+`/skills` in Codex, or the harness's skill mechanism in Hermes). It gathers missing
+requirements, drafts acceptance criteria, writes a goal JSON file and summarizes it. It
+starts once the user has said to proceed, or directly when the user already asked it to
+start. The harness follows Jev's role and brief, records each turn, and requests an
+independent reviewer when Jev routes to review. The server runs configured checks and
+records the run; only the reviewer can mark it complete.
 
-> build with jev: a small tool that renames my photos by capture date
-
-or invoke the skill directly: `/jev` (Claude Code), `$jev` or `/skills`
-(Codex). The skill asks a few concrete questions (folder, language, how to test it,
-size), writes the acceptance criteria and `goal.json` for you, shows a summary and runs
-the loop when you say go.
-
-## One skill, three parts
-
-The installed `jev` skill combines **Loop** (goal, execution, checks and independent
-review), **Route** (Jev selects the model tier, skill and delegation for each task),
-and **Git** (Jev proposes commit, push or PR behind deterministic publishing rules).
-Say `jev`, `jev-loop`, `jev-route` or `jev-git`; they all use the same skill.
-The MCP server remains named `jev-loop`.
-
-`route.py` and `git_decide.py` live next to `SKILL.md` and use only Python's standard
-library. Both read the same TypeSafe key as the server. Claude's model tiers map to
-available models in Codex and Hermes; when delegation is unavailable, the harness
-runs in-session and reports that fallback. Reviews use the main model or stronger.
-
-The installers copy the entire skill directory and migrate recognized legacy skills:
-`jev-loop` for each harness, plus `jev-route` and `jev-git` for Claude Code. A legacy
-folder is removed only when its SKILL.md frontmatter identifies that exact skill;
-custom folders with different names in frontmatter are preserved.
-
-Git's private per-repository rules live outside repositories in
-`~/.config/jev-git/policies/*.json`. Protected branches block direct publishing by
-default. A trusted local policy can adapt that rule to a repository's documented
-release workflow; secret, identity and review checks still apply. A recommendation
-never grants permission to publish beyond the user's authorized scope.
-
-## How a turn runs
-
-```
-loop_decide ──► execute ──► loop_record_turn ──► (checks run) ────┐
-     ▲             │                                              │
-     │             └──(Jev: checks OK and p_done ≥ threshold)─► review ──► loop_record_review
-     └────────────────────────────────────────────────────────────┘          │
-                                                                    done ──► stop
+```text
+loop_start → loop_decide → execute → loop_record_turn → checks → loop_decide
+                                      review → loop_record_review → execute or stop
 ```
 
-Hard stops: `max_turns`, `max_consecutive_failures`, or Jev chooses `escalate`.
-A turn fails when the executor reports failure, a previously green check breaks, or
-nothing moves (no files, same failure output). A check that is simply still red is not enough.
-If the loop stalls - same role, all checks green and unchanged output for `stall_turns`
-turns in a row - Jev is told so (`stalled`) and asked an extra question: can more executor
-work change anything, or should an independent reviewer judge now? If Jev says yes
-(≥ `jev_review_threshold`), the loop goes to review even though `p_done` is below the
-threshold. The same question is asked after `review_turns` green executor turns since the
-last review, or since the start when no reviewer has looked yet (`reviewed_before` /
-`unreviewed`): a run that keeps doing real work never stalls, and Jev's `p_done` - it sees
-file names, check results and notes, not the work - can stay below the threshold for a
-whole run. The code decides nothing; the review still decides whether the goal is met.
-Everything is logged in `runs/<id>.jsonl` (the decision tape, including Jev's raw answers),
-and the state in `runs/<id>.state.json`, so a run can be resumed.
+The MCP tools are `loop_start(goal_path)`, `loop_decide(run_id)`,
+`loop_record_turn(run_id, notes, files, executor_ok)`,
+`loop_record_review(run_id, done, missing)` and `loop_status(run_id)`. A rejected review
+returns the run to execution; record that turn before the next decision. An approved review
+stops the run as complete.
 
-What Jev sees: goal, acceptance criteria, the project's file list, check results, the latest
-turns, and the last review's missing items *together with the turns since*. Raw agent output
-is not sent; Jev is weak against noise.
+Example requests include:
 
-## goal.json
+> Build with Jev: a small tool that renames my photos by capture date.
 
-The skill writes it for you, but the format is simple (see [goal.example.json](goal.example.json)):
+> Continue the existing goal in this folder and fix the failing checks.
 
-| Field | Meaning |
-| --- | --- |
-| `goal` | The goal in one sentence |
-| `acceptance` | List of concrete, checkable criteria |
-| `checks` | Shell commands run in `workdir`; exit 0 = pass. The more deterministic checks, the more honest the loop |
-| `workdir` | The project folder, relative to the goal file |
-| `roles` | `when` = Jev's routing criterion, `brief` = instructions for the executor |
-| `jev_model` | Default `jev-latest` |
-| `jev_done_threshold` | When Jev may send the run to review (default 0.8) |
-| `stall_turns` | Unchanged green turns with the same role before Jev is asked about review (default 2) |
-| `jev_review_threshold` | When Jev's answer to that question sends the run to review (default 0.5) |
-| `review_turns` | Green executor turns since the last review, or since the start, before Jev is asked about review (default 3) |
-| `max_turns`, `max_consecutive_failures`, `check_timeout` | Hard limits |
+The skill supports harness-specific tool names and workflows; question and delegation
+facilities vary by harness. If an optional question or Route delegation tool is
+unavailable, the skill uses a suitable chat or in-session fallback and states the
+limitation. Loop always follows the MCP server protocol and obtains an independent review;
+the executor cannot replace that review with its own verdict.
 
-## MCP tools
+The goal file uses `goal`, `acceptance`, `workdir`, `checks`, `roles` and optional limits
+such as `max_turns`, `max_consecutive_failures`, `check_timeout`, `stall_turns`,
+`review_turns`, `jev_done_threshold` and `jev_review_threshold`; see
+[goal.example.json](goal.example.json). Checks are shell commands run in
+`workdir`. They may execute code on your machine. Jev receives the goal, acceptance
+criteria, a limited project file list, check results and compact turn notes; it does not
+read the implementation itself. A reviewer reads the work independently. Stalled or
+unreviewed progress can be sent to review before Jev's done score crosses its threshold.
+The server stores run state in `runs/<id>.state.json` and a decision tape in
+`runs/<id>.jsonl`.
 
-| Tool | Does |
-| --- | --- |
-| `loop_start(goal_path)` | Creates a run, runs the checks once |
-| `loop_decide(run_id)` | Asks Jev; answers `execute`, `review` or `stop` |
-| `loop_record_turn(run_id, notes, files, executor_ok)` | Records the turn and runs the checks |
-| `loop_record_review(run_id, done, missing)` | Records the reviewer's verdict |
-| `loop_status(run_id)` | Shows phase, history and tape |
+The separate legacy [loop.py](loop.py) script asks models through OpenRouter to execute
+and review the goal. Its `executor_model` and `review_model` settings in the example goal
+apply to that script; the MCP Loop uses the active harness for execution and review.
 
-## Standalone script: loop.py
+## Route
 
-`loop.py` is the original variant without a harness: executor and reviewer are models
-via OpenRouter. Requires `OPENROUTER_API_KEY` and `TYPESAFE_API_KEY`.
+Route asks Jev to choose a capability tier, a relevant skill and whether to delegate. The
+tiers `haiku`, `sonnet`, `opus` and `fable` describe relative capabilities; they are not
+model IDs. Map the returned tier to a model actually available in the current harness.
+When the chosen skill falls below the helper's confidence threshold, it returns `none`.
+If a requested model or delegation feature is unavailable, the harness applies its
+documented fallback.
 
-```powershell
-copy goal.example.json goal.json
-python loop.py goal.json
+Create a JSON request and pass its path to the installed helper:
+
+```json
+{
+  "task": "Add CSV export and define done criteria",
+  "context": "Keep the existing command-line interface",
+  "skills": {"api-and-interface-design": "Design stable module interfaces"},
+  "main_model": "sonnet",
+  "review": false
+}
 ```
 
-Exit codes: 0 = done, 1 = max_turns, 2 = needs a human.
-Note: the MCP variant is the maintained one; `loop.py` does not yet send the file list or
-review progress to Jev.
+```bash
+python ~/.agents/skills/jev/route.py request.json
+```
+
+Use `main_model` as the main session's mapped capability tier. `review` must be a JSON
+boolean; set it to `true` for an independent reviewer, which requires delegation and
+raises its tier to at least the main session's tier. The output JSON includes `model`,
+`skill`, `subagent`, `reason` and `raw` probability data. The helper makes the TypeSafe
+request and returns a decision; it does not launch models or agents itself.
+
+## Git
+
+Git gathers repository facts, asks Jev for a next step, and applies hard blocks before
+returning `action`, `blocked`, `commands`, `argv`, `reason`, `facts` and `raw` fields.
+Preview facts and blocks without a TypeSafe call:
+
+```bash
+python ~/.agents/skills/jev/git_decide.py --repo . --summary "Feature is complete" --scan-only
+```
+
+For a Jev decision, include `--reviewed` only after independent review and
+`--checks-green` only when checks for the current work pass:
+
+```bash
+python ~/.agents/skills/jev/git_decide.py --repo . --summary "Feature is complete" --reviewed --checks-green
+```
+
+The helper does not modify Git state. `commands` is display guidance only; use the
+returned `argv` as argument vectors with shell execution disabled, after replacing its
+placeholders. The harness executes only steps already within the user's authorization.
+By default, direct publishing from `main` or `master` is blocked; pushes are blocked for
+unsupported origin destinations, blocked commits, disallowed identities, matching private
+patterns or suspected secrets. A pull request also requires both flags above, and an
+outward step may be withheld when Jev says a user decision is needed.
+
+The secret scan uses a small set of text patterns over added lines in outgoing commits,
+merge-parent diffs and the working-tree diff, plus commit subjects. It is a heuristic and
+cannot guarantee that secrets or private data are absent. Review outgoing changes yourself.
+Private per-repository policies live outside the repository in
+`~/.config/jev-git/policies/*.json`. They match the canonical origin remote exactly. If a
+repository is renamed, update its configured origin URL and the policy's `remote` value
+to the new matching remote while retaining the rest of the policy.
+
+## Moving existing clones after the repository rename
+
+The repository's canonical URL is `King4s/jev`. Once the GitHub rename is complete, move
+an existing clone to the new remote by updating its `origin`, pulling, and rerunning the
+installer. The local directory may keep its old name; runtime identities such as the MCP
+server and API key path remain `jev-loop`.
+
+```bash
+git remote set-url origin git@github.com:King4s/jev.git
+git pull
+./install.sh                 # Windows: .\install.ps1
+```
 
 ## Development
 
-The repo is maintained by AI agents; the rules are in [AGENTS.md](AGENTS.md).
-
-```powershell
-pip install -r requirements.txt
-python -m pytest -q tests     # protocol tests with Jev mocked, no network
-```
-
-Versions are date-based, `yyyy.mm.dd.hhmm`. New release (requires a clean working tree):
-
-```powershell
-.\release.ps1
-```
-
-The script sets `VERSION`, moves `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md) under the
-new version, commits, tags `v<version>`, pushes and creates a GitHub release.
+See [AGENTS.md](AGENTS.md) for repository workflow and [CHANGELOG.md](CHANGELOG.md) for
+release history. The helper modules use Python's standard library; the MCP server requires
+the packages in `requirements.txt`. On Linux or macOS, run `pip install -r requirements.txt`
+(Windows PowerShell: `python -m pip install -r requirements.txt`).
 
 ## Security
 
-`checks` runs commands in a shell on your machine, and the code they test was written by a
-model. Run unknown goals in a VM or container. The API key is read only from the environment
-or the key file and is never stored in the repo or in the tape.
+Checks run shell commands from the goal file, and the code they test may have been written
+by a model. Treat goals and checks as executable code and use an isolated environment for
+untrusted projects. The API key is read from the environment or key file; it is not written
+to the repository or run tape.
 
 ## License
 
