@@ -5,6 +5,8 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+## [2026.09.27.0041] - 2026-09-27
+
 ### Changed
 - Rename the project to Jev-AI-Skill and update canonical repository links.
 - Explain Loop, Route and Git benefits, shared workflows across AI clients, and current
