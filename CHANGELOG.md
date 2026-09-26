@@ -5,6 +5,8 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+## [2026.09.27.0035] - 2026-09-27
+
 ### Changed
 - Refresh Jev branding and document the unified Loop, Route and Git capabilities, current
   installer behavior, helper outputs and Git scanning limitations.
