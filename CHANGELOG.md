@@ -5,6 +5,8 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+## [2026.09.27.1827] - 2026-09-27
+
 ### Changed
 - Treat Jev Loop's check results as authoritative and avoid redundant test reruns;
   use minimal manual diagnostics only if Jev is stuck on a test.
