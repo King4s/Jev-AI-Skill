@@ -108,6 +108,14 @@ in Claude Code and Codex they come from the `jev-loop` MCP server as `loop_start
      where the result is, and how to run it. On `escalate`, summarise what keeps failing.
 3. Repeat until `stop`. One short line to the user per turn (turn, role, checks ok/fail).
 
+Treat the checks run by `loop_record_turn` as authoritative. Do not rerun a
+configured check or repeatedly run a focused test merely to verify that Jev
+tested it, including after a transient failure. Give the failure back to
+`loop_decide` and follow its recovery step. Override this only when Jev is
+stuck on a test and cannot make progress from the evidence it has; then run
+the smallest diagnostic needed to obtain the missing failure detail, not a
+series of confirmatory reruns.
+
 ### When the run keeps answering `execute`
 
 The server decides; you never route yourself. But the server's two facts about a
