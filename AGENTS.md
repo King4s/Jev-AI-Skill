@@ -15,10 +15,14 @@ English; answer the owner in their language.
   host. Gate inputs are clipped (`SUMMARY_CHARS`, `ITEM_CHARS`, `CONTEXT_CHARS`,
   `MAX_BATCH`); keep them that way. `--http` serves the same tools over stateless
   streamable HTTP for a shared host (`deploy/jev-loop-http.service`); the installers
-  register `JEV_MCP_URL` instead of a local server when it is set.
-- `skill/jev/SKILL.md` is the shared skill for Loop, Route and Git. Its standard-library
-  helpers are `route.py` and `git_decide.py` in the same directory. Installed skills use
-  the name `jev`, in the harness-specific skills directory.
+  register `JEV_MCP_URL` instead of a local server when it is set. `--watch` runs a
+  recurring check as a script-only job: silent on success, a failure is triaged by Jev
+  (`gate_triage`) and reported once until the check passes again.
+- `skill/jev/SKILL.md` is the shared skill for Loop (including finding and fixing existing
+  code), Gate, Route and Git. Its standard-library helpers in the same directory are
+  `route.py`, `git_decide.py` and `find_code.py` (Jev-ranked code search that keeps every
+  lead and reports coverage). Installed skills use the name `jev`, in the
+  harness-specific skills directory.
 - `loop.py` is a legacy standalone variant using OpenRouter models as executor and
   reviewer. The MCP Loop is the maintained workflow.
 

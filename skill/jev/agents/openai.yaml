@@ -1,12 +1,12 @@
 interface:
   display_name: "jev"
-  short_description: "Jev selects build turns, model routing and safe Git steps"
-  default_prompt: "Use $jev to build, route or decide the next Git step."
+  short_description: "Jev runs build and repair loops, gates large-model turns, routes models and guards Git steps"
+  default_prompt: "Use $jev to build, find and fix code, gate a check, route or decide the next Git step."
 policy:
   allow_implicit_invocation: true
 dependencies:
   tools:
     - type: "mcp"
       value: "jev-loop"
-      description: "jev-loop MCP server: loop_start, loop_decide, loop_record_turn, loop_record_review, loop_status"
+      description: "jev-loop MCP server: loop_start, loop_decide, loop_record_turn, loop_record_review, loop_status, gate_triage, gate_verdict, gate_decide, gate_pick"
       transport: "stdio"

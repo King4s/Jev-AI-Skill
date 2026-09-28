@@ -5,6 +5,12 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Changed
+- The documentation now names everything the skill contains: README's introduction
+  says four capabilities (Loop, Gate, Route, Git) plus `find_code.py` and `--watch`, lists
+  all three helpers and the `jev-gate` trigger; AGENTS describes Gate, `find_code.py` and
+  `--watch`; the Codex metadata (`agents/openai.yaml`) lists the Gate tools and code repair.
+
 ## [2026.09.28.1826] - 2026-09-28
 
 ### Changed

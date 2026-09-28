@@ -6,7 +6,9 @@
 
 **One workflow for your AI coding tools: build, choose the right help, review and publish.**
 
-Jev-AI-Skill brings three capabilities together in one reusable skill. Describe what you
+Jev-AI-Skill brings four capabilities together in one reusable skill, plus a code-search
+helper for finding and fixing existing code (`find_code.py`) and a script-only watch mode
+for recurring checks (`--watch`). Describe what you
 want to achieve, and your AI assistant gets a structured way to work toward it, check the
 result and prepare the next Git step. Jev, the decision model from TypeSafe System One,
 provides judgments; your AI coding tool performs the work.
@@ -62,8 +64,9 @@ that every relevant location was recognized or make an exhaustive review unneces
 The installed skill is named `jev`. The MCP server and its tools keep their existing
 identity, `jev-loop` (`loop_start`, `loop_decide`, `loop_record_turn`,
 `loop_record_review`, `loop_status`, and the Gate tools `gate_triage`, `gate_verdict`,
-`gate_decide`, `gate_pick`). Route and Git are Python helpers, not MCP tools.
-Say `jev`, `jev-loop`, `jev-route` or `jev-git`; these legacy triggers use the same skill.
+`gate_decide`, `gate_pick`). Route, Git and code search are Python helpers next to the
+skill (`route.py`, `git_decide.py`, `find_code.py`), not MCP tools.
+Say `jev`, `jev-loop`, `jev-gate`, `jev-route` or `jev-git`; these triggers use the same skill.
 The installers migrate recognized old skill folders (`jev-loop`, `jev-route` and
 `jev-git` where configured), removing a folder only when its frontmatter confirms that
 exact legacy skill.
