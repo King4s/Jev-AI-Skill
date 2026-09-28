@@ -5,6 +5,10 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Added
+- Document a code search-and-repair workflow within Jev Loop: inspect matches in
+  context, change only confirmed defects, and verify the repair through Loop.
+
 ## [2026.09.27.1827] - 2026-09-27
 
 ### Changed

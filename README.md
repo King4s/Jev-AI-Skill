@@ -13,7 +13,7 @@ provides judgments; your AI coding tool performs the work.
 
 | Capability | What it does | Why it helps |
 | --- | --- | --- |
-| **Loop** | Turns a goal into execution steps, runs configured checks and requests independent review. | Completion depends on checks and a separate review, with saved state for resuming work. |
+| **Loop** | Turns a build or code-repair goal into execution steps, runs configured checks and requests independent review. | Completion depends on checks and a separate review, with saved state for resuming work. |
 | **Route** | Chooses a model capability tier, a relevant installed skill and whether to delegate. | Routine tasks can use lighter models while harder work gets stronger help; actual cost and quality depend on the available models. |
 | **Git** | Recommends commit, push or pull-request steps and applies repository rules. | Keeps publishing decisions tied to repository facts, review status and your authorization. |
 
@@ -39,6 +39,11 @@ For example, ask: “Build a CSV export for this project with Jev.” Loop coord
 work and checks, Route helps choose a suitable skill and model for each task, and an
 independent reviewer evaluates the result. Git then recommends an authorized repository
 step. You can also use Route or Git on their own.
+
+For an existing codebase, ask: “Find where the old parser API is used, fix the calls
+that are broken, and verify the behavior with Jev.” The coding assistant searches
+and inspects the matches; Jev Loop coordinates the repair, checks and review. A
+request to find locations only reports them without editing files.
 
 The installed skill is named `jev`. The MCP server and its tools keep their existing
 identity, `jev-loop` (`loop_start`, `loop_decide`, `loop_record_turn`,

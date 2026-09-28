@@ -1,6 +1,6 @@
 ---
 name: jev
-description: Jev-AI-Skill is one skill for Claude Code, Codex and Hermes with three capabilities — Loop for execution and review, Route for model/skill/delegation choices, and Git for guarded repository steps. Triggers include Jev-AI-Skill, jev, jev-loop, kør loopen, byg med jev, lad Jev styre, jev-route, lad Jev vælge, jev-git and skal det pushes.
+description: Jev-AI-Skill is one skill for Claude Code, Codex and Hermes with three capabilities — Loop for building, finding and fixing code, and review; Route for model/skill/delegation choices; Git for guarded repository steps. Triggers include Jev-AI-Skill, jev, jev-loop, kør loopen, byg med jev, find og ret med jev, lad Jev styre, jev-route, lad Jev vælge, jev-git and skal det pushes.
 ---
 
 # Jev-AI-Skill
@@ -12,6 +12,20 @@ The project is Jev-AI-Skill; its installed skill name and invocation remain `jev
 The user should only have to say *what* they want. You work out the rest by asking
 a few good questions, write the goal file yourself, and run the loop.
 Talk to the user in their language (usually Danish).
+
+### Find and fix existing code
+
+When the goal is to find code that may need repair, use Loop for the repair and its
+checks. The executor searches the project; Jev decides Loop steps from compact
+findings, not from a raw dump of search results. Start with the supplied error,
+symbol or literal text (use `rg -n -F` for literal text and `rg --files` for names),
+then inspect nearby code and callers before deciding which matches are defects.
+Exclude generated and dependency files unless the evidence points there. A match is
+a lead, not permission for a global replacement. If the first search misses, broaden
+to related symbols or behavior; report an unresolved search honestly if the relevant
+code still cannot be found. Fix only confirmed, in-scope occurrences and use the
+Loop checks and review to verify the requested behavior. If the user asked only to
+locate code, report the locations and do not edit it.
 
 ## Phase 1 - Interview (skip what you already know)
 
