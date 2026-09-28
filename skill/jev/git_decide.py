@@ -121,11 +121,13 @@ def facts_for(repo, summary, reviewed, checks_green):
     status = git(repo, "status", "--porcelain", strip=False).splitlines()
     # Commands below explicitly push this branch to origin, regardless of @{u}.
     # An unrelated upstream/base cannot prove that origin already has a commit.
-    origin_ref = f"refs/remotes/origin/{branch}"
-    origin_tip = git(repo, "rev-parse", "--verify", "-q", origin_ref, check=False)
-    outgoing_range = f"{origin_tip}..HEAD" if supported_destination and origin_tip else "HEAD"
+    # Commits reachable from any origin remote-tracking ref were fetched from origin,
+    # so origin already has them; everything else reachable from HEAD is outgoing. A
+    # new branch is therefore scanned from where it left origin's history, not from
+    # the root, and public history (e.g. test fixtures) cannot block it.
+    outgoing_range = ("HEAD", "--not", "--remotes=origin") if supported_destination else ("HEAD",)
     commits = [l for l in git(repo, "log", "--format=%h%x09%ae%x09%ce%x09%s",
-                              outgoing_range, check=False).splitlines() if l]
+                              *outgoing_range, check=False).splitlines() if l]
     ahead_of_main = int(git(repo, "rev-list", "--count", f"{base}..HEAD") or 0) if base else None
 
     blocked = []
@@ -138,7 +140,7 @@ def facts_for(repo, summary, reviewed, checks_green):
     if branch in protected:
         blocked.append(f"on protected branch '{branch}': work on a feature branch")
     allowed = set(policy.get("allowed_author_emails", []))
-    full_shas = git(repo, "log", "--format=%H", outgoing_range, check=False).split()
+    full_shas = git(repo, "log", "--format=%H", *outgoing_range, check=False).split()
     for sha in policy.get("blocked_shas", []):
         if any(s.startswith(sha) for s in full_shas):
             blocked.append(f"blocked commit {sha} is in the outgoing range")
@@ -151,7 +153,7 @@ def facts_for(repo, summary, reviewed, checks_green):
     # diffs and would miss content introduced only during conflict resolution.
     added = []
     if commits:
-        added += [l[1:] for l in git(repo, "log", "-p", "-m", "--format=", outgoing_range,
+        added += [l[1:] for l in git(repo, "log", "-p", "-m", "--format=", *outgoing_range,
                                      check=False).splitlines()
                   if l.startswith("+") and not l.startswith("+++")]
     added += [l[1:] for l in git(repo, "diff", "HEAD", check=False).splitlines()

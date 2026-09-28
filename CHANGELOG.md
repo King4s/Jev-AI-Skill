@@ -5,6 +5,11 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Fixed
+- Git scanned a branch that origin did not have yet from the root of its history, so
+  secret-looking test fixtures already public on origin blocked every new branch. Outgoing
+  commits are now those reachable from HEAD but from no origin remote-tracking ref.
+
 ## [2026.09.28.1616] - 2026-09-28
 
 ### Fixed

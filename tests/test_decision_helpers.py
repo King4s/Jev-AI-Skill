@@ -216,6 +216,18 @@ def test_known_origin_branch_defines_outgoing_range(
     assert len(facts["outgoing_commits"]) == 1
 
 
+def test_new_branch_is_scanned_from_where_it_left_origin(repository, git_decider):
+    """Public history on origin must not block a new branch that origin lacks."""
+    public = commit(repository, "token = 'mock-jwt-token-for-tests'\n")
+    git(repository, "update-ref", "refs/remotes/origin/main", public)
+    outgoing = commit(repository, "clean change\n")
+    policy(git_decider, blocked_shas=[public])
+    facts, blocked, _ = git_decider.facts_for(str(repository), "", True, True)
+    assert blocked == [], blocked
+    assert len(facts["outgoing_commits"]) == 1
+    assert facts["outgoing_commits"][0].startswith(outgoing[:7])
+
+
 @pytest.mark.parametrize("violation", ["secret", "pattern"])
 def test_merge_only_additions_are_scanned(repository, git_decider, violation):
     git(repository, "checkout", "-b", "side")
