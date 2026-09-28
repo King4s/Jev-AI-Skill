@@ -1,17 +1,36 @@
 # Jev-AI-Skill
 
-![Jev-AI-Skill — Build. Route. Review. Ship. Loop, Route and Git.](assets/jev-ai-skill-banner.png)
+![Jev-AI-Skill — Build. Gate. Route. Review. Ship. Loop, Gate, Route and Git.](assets/jev-ai-skill-banner.png)
 
 [![tests](https://github.com/King4s/Jev-AI-Skill/actions/workflows/test.yml/badge.svg)](https://github.com/King4s/Jev-AI-Skill/actions/workflows/test.yml)
 
-**One workflow for your AI coding tools: build, choose the right help, review and publish.**
+**One workflow for your AI coding tools: build, skip the large-model turns you don't need,
+choose the right help, review and publish.**
 
-Jev-AI-Skill brings four capabilities together in one reusable skill, plus a code-search
-helper for finding and fixing existing code (`find_code.py`) and a script-only watch mode
-for recurring checks (`--watch`). Describe what you
-want to achieve, and your AI assistant gets a structured way to work toward it, check the
-result and prepare the next Git step. Jev, the decision model from TypeSafe System One,
-provides judgments; your AI coding tool performs the work.
+Jev-AI-Skill is one skill and one MCP server for **Claude Code, Codex and Hermes**. Jev,
+the fast decision model from TypeSafe System One, makes the small judgments; your AI
+coding tool does the work. Describe what you want to achieve, and your assistant gets a
+structured way to work toward it, check the result and prepare the next Git step, while
+Jev keeps large models out of turns a single cheap decision can settle.
+
+### What you get
+
+- **Loop** builds, finds and fixes code with configured checks and an independent review.
+- **Gate** asks Jev before a large model runs, with four MCP tools:
+  - `gate_triage` decides whether a cron run, poll, notification or chat event needs an
+    agent at all.
+  - `gate_verdict` checks which review findings the evidence already closes before
+    another review round.
+  - `gate_decide` answers a question you would otherwise be asked, and says when you
+    really must decide.
+  - `gate_pick` chooses a tool, skill or session from one-line descriptions.
+- **`--watch`** runs a recurring check with no agent: silent on success, and a new failure
+  is reported once.
+- **`--http` and `JEV_MCP_URL`** let every machine on your private network share one
+  always-on server.
+- **Route** picks a model tier, a skill and whether to delegate.
+- **Git** recommends commit, push or pull-request steps within repository rules.
+- **`find_code.py`** ranks code-search results so a coding model reads less.
 
 | Capability | What it does | Why it helps |
 | --- | --- | --- |
