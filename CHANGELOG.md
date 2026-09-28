@@ -32,6 +32,9 @@ New releases are made with `.\release.ps1`.
   repeat review round.
 - Document a code search-and-repair workflow within Jev Loop: inspect matches in
   context, change only confirmed defects, and verify the repair through Loop.
+- Add `find_code.py` to score every source chunk or literal match in the selected
+  scope with Jev, retain all leads for a capable coding model, and report coverage
+  or provider failures without silent truncation.
 
 ## [2026.09.27.1827] - 2026-09-27
 

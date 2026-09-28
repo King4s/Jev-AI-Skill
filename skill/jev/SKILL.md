@@ -53,12 +53,24 @@ Talk to the user in their language (usually Danish).
 ### Find and fix existing code
 
 When the goal is to find code that may need repair, use Loop for the repair and its
-checks. The executor searches the project; Jev decides Loop steps from compact
-findings, not from a raw dump of search results. Start with the supplied error,
-symbol or literal text (use `rg -n -F` for literal text and `rg --files` for names),
-then inspect nearby code and callers before deciding which matches are defects.
-Exclude generated and dependency files unless the evidence points there. A match is
-a lead, not permission for a global replacement. If the first search misses, broaden
+checks. For an ambiguous request, run `python <this-skill-directory>/find_code.py
+--repo <project> --task "<requested change>" --output <report.json>`. The helper
+enumerates every ripgrep-visible UTF-8 text file in that scope, divides it into
+bounded line ranges, asks Jev to score every range, and writes **all** scored ranges
+to the handoff report, including low scores. It does not filter out a possible last
+match or edit files. Pass the report and user request to a capable coding model;
+that model must inspect the original files and decide which exact lines to change.
+For a precise error or symbol, add `--pattern "<literal text>"` to rank every
+literal matching line instead. A relevance score orders inspection, not proof of a
+defect. The helper fails rather than silently truncating an oversized scope; narrow
+`--repo` or explicitly raise `--max-entries`. Report excluded non-UTF-8/binary files
+and clipped literal excerpts as coverage limits. If Jev is unavailable, use the
+unranked report and disclose that ranking failed. Jev decides Loop steps from
+compact findings, not from a raw dump of search results.
+The helper respects ripgrep ignores and excludes common generated/dependency paths.
+Expand the scope if evidence points there. Do not send credentials or prohibited
+private source excerpts to the TypeSafe API. A match is a
+lead, not permission for a global replacement. If the first search misses, broaden
 to related symbols or behavior; report an unresolved search honestly if the relevant
 code still cannot be found. Fix only confirmed, in-scope occurrences and use the
 Loop checks and review to verify the requested behavior. If the user asked only to

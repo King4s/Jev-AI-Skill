@@ -43,8 +43,21 @@ step. You can also use Route or Git on their own.
 
 For an existing codebase, ask: “Find where the old parser API is used, fix the calls
 that are broken, and verify the behavior with Jev.” The coding assistant searches
-and inspects the matches; Jev Loop coordinates the repair, checks and review. A
+and inspects the matches. For an ambiguous change, `find_code.py` enumerates every
+visible text chunk in the selected project and asks Jev to rank all of them. It keeps
+low-scoring chunks in the report; a capable coding model then inspects the original
+files and decides what to edit. With an exact symbol, the helper can instead rank
+all literal matching lines. Jev Loop coordinates the repair, checks and review. A
 request to find locations only reports them without editing files.
+
+Run the read-only ranking helper directly with
+`python <jev-skill-dir>/find_code.py --repo <project> --task "Fix old parser behavior" --output report.json`.
+Add `--pattern "old_api"` for exhaustive literal matches in that scope. It requires
+`rg` and the same TypeSafe key as Jev Route. When Jev cannot answer, the report
+retains unranked leads and reports the failure. The helper sends short source
+excerpts to TypeSafe; do not use it for credentials or source that must stay local.
+Ranking may save coding-model reading on ambiguous searches, but it does not prove
+that every relevant location was recognized or make an exhaustive review unnecessary.
 
 The installed skill is named `jev`. The MCP server and its tools keep their existing
 identity, `jev-loop` (`loop_start`, `loop_decide`, `loop_record_turn`,
