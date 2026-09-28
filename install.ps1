@@ -55,7 +55,9 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
         $hermesEnvArgs = @("--env", 'TYPESAFE_API_KEY=${TYPESAFE_API_KEY}')
     }
     hermes mcp remove jev-loop 2>$null | Out-Null
-    if ($mcpUrl) { "y`n" | hermes mcp add jev-loop --url $mcpUrl }
+    # For a URL Hermes first asks whether the server needs authentication (it does not: bind it
+    # to a private address), then whether to enable its tools.
+    if ($mcpUrl) { "n`ny`n" | hermes mcp add jev-loop --url $mcpUrl --connect-timeout 20 }
     else { "y`n" | hermes mcp add jev-loop --command python @hermesEnvArgs --args $server }
     Write-Host "MCP server registered: jev-loop -> $target (start a new Hermes session)"
 } else {

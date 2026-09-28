@@ -70,7 +70,9 @@ if command -v hermes >/dev/null 2>&1; then
   fi
   hermes mcp remove jev-loop >/dev/null 2>&1 || true
   if [ -n "$MCP_URL" ]; then
-    printf 'y\n' | hermes mcp add jev-loop --url "$MCP_URL"
+    # For a URL Hermes first asks whether the server needs authentication (it does not: bind it
+    # to a private address), then whether to enable its tools.
+    printf 'n\ny\n' | hermes mcp add jev-loop --url "$MCP_URL" --connect-timeout 20
   else
     printf 'y\n' | hermes mcp add jev-loop --command "$ROOT/.venv/bin/python" \
       ${env_args[@]+"${env_args[@]}"} --args "$ROOT/jev_mcp.py"

@@ -5,6 +5,14 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Fixed
+- Registering a shared server URL with Hermes no longer stalls the installers: they
+  answer Hermes' authentication prompt with no before enabling the tools.
+- `--watch` fingerprints a failure by its problem lines without clock times, so the same
+  problem on the next run is recognized without a Jev call instead of being reported again.
+  A failed Jev call reports the problem once, and an unwritable gate tape no longer turns
+  a decision into an error.
+
 ### Added
 - `jev_mcp.py --http --host <ip> --port <port>` serves the same tools over stateless
   streamable HTTP, so one always-on host can serve every machine on a private network.
