@@ -5,6 +5,8 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+## [2026.09.28.1636] - 2026-09-28
+
 ### Fixed
 - The installers hung on Windows (and in any terminal) at `hermes mcp remove`, which asks
   "Remove server? [Y/n]" and waits on a console stdin. Both now answer the prompt.
