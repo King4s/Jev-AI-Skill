@@ -125,3 +125,17 @@ def test_install_sh_answers_hermes_remove_prompt():
     """`hermes mcp remove` prompts [Y/n]; run from a terminal it would wait forever."""
     text = (ROOT / "install.sh").read_text(encoding="utf-8")
     assert r"printf 'y\n' | hermes mcp remove jev-loop" in text
+
+
+def test_shared_server_url_works_with_hermes_without_connect_timeout(sandbox):
+    """Hermes v0.17 has no --connect-timeout: fall back to registering without it."""
+    tmp_path, home, log = sandbox
+    old = tmp_path / "bin" / "hermes"
+    old.write_text('#!/bin/sh\necho "$0 $*" >> "' + str(log) + '"\n'
+                   'case "$*" in *--connect-timeout*) exit 2 ;; esac\nexit 0\n', encoding="utf-8")
+    url = "http://100.64.0.1:8765/mcp"
+    env = {"HOME": str(home), "PATH": f"{tmp_path}/.venv/bin:{tmp_path}/bin:/usr/bin:/bin", "JEV_MCP_URL": url}
+    r = subprocess.run(["bash", "install.sh"], cwd=tmp_path, env=env, capture_output=True, text=True)
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert r.returncode == 0, r.stderr
+    assert any(line.endswith(f"hermes mcp add jev-loop --url {url}") for line in calls)

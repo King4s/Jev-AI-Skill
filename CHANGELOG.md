@@ -5,6 +5,10 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Fixed
+- `install.sh` registers a shared server URL with older Hermes releases that reject
+  `--connect-timeout` (seen with v0.17): it retries the registration without the flag.
+
 ## [2026.09.28.1636] - 2026-09-28
 
 ### Fixed
