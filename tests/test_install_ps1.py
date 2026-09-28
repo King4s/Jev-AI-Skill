@@ -37,4 +37,4 @@ def test_install_ps1_supports_shared_server_url():
     assert "$env:JEV_MCP_URL" in text
     assert "claude mcp add --transport http jev-loop --scope user $mcpUrl" in text
     assert "codex mcp add jev-loop --url $mcpUrl" in text
-    assert "hermes mcp add jev-loop --url $mcpUrl" in text
+    assert '"n`ny`n" | hermes mcp add jev-loop --url $mcpUrl' in text

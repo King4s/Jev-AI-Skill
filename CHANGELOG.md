@@ -5,6 +5,10 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Fixed
+- Registering a shared server URL with Hermes no longer stalls the installers: they
+  answer Hermes' authentication prompt with no before enabling the tools.
+
 ### Added
 - `jev_mcp.py --http --host <ip> --port <port>` serves the same tools over stateless
   streamable HTTP, so one always-on host can serve every machine on a private network.

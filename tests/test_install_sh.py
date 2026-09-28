@@ -117,5 +117,5 @@ def test_shared_server_url_registers_http_for_every_harness(sandbox):
     assert r.returncode == 0, r.stderr
     assert f"claude mcp add --transport http jev-loop --scope user {url}" in calls
     assert f"codex mcp add jev-loop --url {url}" in calls
-    assert f"hermes mcp add jev-loop --url {url}" in calls
+    assert f"hermes mcp add jev-loop --url {url} --connect-timeout 20" in calls
     assert "jev_mcp.py" not in calls and "Skipping the local check" in r.stdout
