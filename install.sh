@@ -6,6 +6,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
 KEY_FILE="$HOME/.config/jev-loop/typesafe_api_key"
+# JEV_MCP_URL points every harness at one shared, always-on server (jev_mcp.py --http)
+# instead of starting a local copy; the key then lives only on that server.
+MCP_URL="${JEV_MCP_URL:-}"
+TARGET="${MCP_URL:-$ROOT/jev_mcp.py}"
 
 if [ ! -x .venv/bin/python ] || ! .venv/bin/python -m pip --version >/dev/null 2>&1; then
   rm -rf .venv
@@ -25,8 +29,12 @@ if command -v claude >/dev/null 2>&1; then
   .venv/bin/python install_skill.py skill/jev "$HOME/.claude/skills" --legacy jev-loop jev-route jev-git
 
   claude mcp remove jev-loop --scope user >/dev/null 2>&1 || true
-  claude mcp add jev-loop --scope user -- "$ROOT/.venv/bin/python" "$ROOT/jev_mcp.py"
-  echo "MCP server registered: jev-loop -> $ROOT/jev_mcp.py"
+  if [ -n "$MCP_URL" ]; then
+    claude mcp add --transport http jev-loop --scope user "$MCP_URL"
+  else
+    claude mcp add jev-loop --scope user -- "$ROOT/.venv/bin/python" "$ROOT/jev_mcp.py"
+  fi
+  echo "MCP server registered: jev-loop -> $TARGET"
 else
   echo "claude not on PATH - skipping Claude Code setup."
 fi
@@ -37,8 +45,12 @@ if command -v codex >/dev/null 2>&1; then
   .venv/bin/python install_skill.py skill/jev "$HOME/.agents/skills" --legacy jev-loop
 
   codex mcp remove jev-loop >/dev/null 2>&1 || true
-  codex mcp add jev-loop -- "$ROOT/.venv/bin/python" "$ROOT/jev_mcp.py"
-  echo "MCP server registered: jev-loop -> $ROOT/jev_mcp.py (restart Codex)"
+  if [ -n "$MCP_URL" ]; then
+    codex mcp add jev-loop --url "$MCP_URL"
+  else
+    codex mcp add jev-loop -- "$ROOT/.venv/bin/python" "$ROOT/jev_mcp.py"
+  fi
+  echo "MCP server registered: jev-loop -> $TARGET (restart Codex)"
 else
   echo "codex not on PATH - skipping Codex setup."
 fi
@@ -57,13 +69,21 @@ if command -v hermes >/dev/null 2>&1; then
     env_args=(--env 'TYPESAFE_API_KEY=${TYPESAFE_API_KEY}')
   fi
   hermes mcp remove jev-loop >/dev/null 2>&1 || true
-  printf 'y\n' | hermes mcp add jev-loop --command "$ROOT/.venv/bin/python" \
-    ${env_args[@]+"${env_args[@]}"} --args "$ROOT/jev_mcp.py"
-  echo "MCP server registered: jev-loop -> $ROOT/jev_mcp.py (start a new Hermes session)"
+  if [ -n "$MCP_URL" ]; then
+    printf 'y\n' | hermes mcp add jev-loop --url "$MCP_URL"
+  else
+    printf 'y\n' | hermes mcp add jev-loop --command "$ROOT/.venv/bin/python" \
+      ${env_args[@]+"${env_args[@]}"} --args "$ROOT/jev_mcp.py"
+  fi
+  echo "MCP server registered: jev-loop -> $TARGET (start a new Hermes session)"
 else
   echo "hermes not on PATH - skipping Hermes setup."
 fi
 
+if [ -n "$MCP_URL" ]; then
+  echo "Using the shared server at $MCP_URL; its host holds the TypeSafe key. Skipping the local check."
+  exit 0
+fi
 if [ -z "${TYPESAFE_API_KEY:-}" ] && [ ! -s "$KEY_FILE" ]; then
   echo "WARNING: no TypeSafe key. Put it in $KEY_FILE (chmod 600) or export TYPESAFE_API_KEY." >&2
   exit 0

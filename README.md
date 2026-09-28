@@ -81,6 +81,26 @@ skill, config and `.env` paths. Both installers run `jev_mcp.py --check` if a ke
 available; otherwise they print a key warning and skip the live check. Restart the harness
 or start a new session after setup. Run the installer again after `git pull` to update.
 
+### One shared server for several machines
+
+By default every harness starts its own local copy of the server. To let every machine on
+a private network use one always-on server, run it over streamable HTTP on that host and
+point the other machines at it:
+
+```bash
+# On the always-on host (a systemd unit is in deploy/jev-loop-http.service)
+python jev_mcp.py --http --host <tailnet-ip> --port 8765
+
+# On each client machine, instead of a plain install
+JEV_MCP_URL=http://<tailnet-ip>:8765/mcp ./install.sh      # Windows: $env:JEV_MCP_URL=...; .\install.ps1
+```
+
+With `JEV_MCP_URL` set, both installers still copy the skill, but register the URL with
+Claude Code, Codex and Hermes instead of a local command, and skip the local key check:
+the TypeSafe key lives only on the server host. The HTTP server has no authentication of
+its own, so bind it to a private address such as a Tailscale IP. Loop runs are stored on
+the server, and their `workdir` and `checks` refer to paths on the server host.
+
 The key file can also be used by the helpers. In Hermes, the installer passes an
 environment reference only when its `.env` contains a `TYPESAFE_API_KEY`; otherwise the
 server reads the key file itself.
@@ -158,6 +178,17 @@ command line:
 echo '{"events": [{"kind": "cron", "source": "smoke", "summary": "exit 1: /suite 404", "exit_code": 1}],
        "known": ["Suite Landing: HTTP 404"]}' | python jev_mcp.py --gate triage
 ```
+
+A recurring health check needs no agent at all. `--watch` runs the check, prints nothing
+on success, and on failure asks Jev whether the problem is new; a new problem is printed
+once and remembered in the known file until the check passes again:
+
+```bash
+python jev_mcp.py --watch --name "Suite smoke" --known-file ~/.cache/jev/suite.known -- python3 smoke.py
+```
+
+Use it as the script of a script-only scheduled job, such as a Hermes `no_agent` cron job,
+where empty output is a silent run.
 
 Gate decides whether a large model runs; it does not replace deterministic facts such as
 exit codes or commit comparisons, and an error from a Gate tool means the expensive path

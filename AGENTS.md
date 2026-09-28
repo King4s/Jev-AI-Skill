@@ -13,7 +13,9 @@ English; answer the owner in their language.
   stateless Gate tools (`gate_triage`, `gate_verdict`, `gate_decide`, `gate_pick`), logged
   to `runs/gate.jsonl`, and the `--gate <name>` command line for scripts without an MCP
   host. Gate inputs are clipped (`SUMMARY_CHARS`, `ITEM_CHARS`, `CONTEXT_CHARS`,
-  `MAX_BATCH`); keep them that way.
+  `MAX_BATCH`); keep them that way. `--http` serves the same tools over stateless
+  streamable HTTP for a shared host (`deploy/jev-loop-http.service`); the installers
+  register `JEV_MCP_URL` instead of a local server when it is set.
 - `skill/jev/SKILL.md` is the shared skill for Loop, Route and Git. Its standard-library
   helpers are `route.py` and `git_decide.py` in the same directory. Installed skills use
   the name `jev`, in the harness-specific skills directory.

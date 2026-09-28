@@ -166,3 +166,61 @@ def test_mcp_server_exposes_gate_tools():
     import asyncio
     names = {t.name for t in asyncio.run(m.build_server().list_tools())}
     assert {"gate_triage", "gate_verdict", "gate_decide", "gate_pick"} <= names
+
+
+def test_http_mode_serves_stateless_streamable_http(monkeypatch):
+    calls = {}
+
+    class Fake:
+        def run(self, transport, **kw):
+            calls["transport"], calls["kw"] = transport, kw
+    monkeypatch.setattr(m, "build_server", lambda: Fake())
+    m.serve_http("100.64.0.1", 8765)
+    assert calls == {"transport": "streamable-http",
+                     "kw": {"host": "100.64.0.1", "port": 8765, "stateless_http": True}}
+
+
+# ---------- watch ----------
+
+def _cmd(code, text):
+    return [sys.executable, "-c", f"import sys; print({text!r}); sys.exit({code})"]
+
+
+def test_watch_is_silent_on_success_and_clears_known(tmp_path, monkeypatch):
+    known = tmp_path / "known.txt"
+    known.write_text("old problem\n", encoding="utf-8")
+    monkeypatch.setattr(m, "gate_triage", lambda *a, **k: pytest.fail("Jev must not be asked on exit 0"))
+    assert m.watch("smoke", _cmd(0, "10/10 passed"), known) == ("", 0)
+    assert not known.exists()
+
+
+def test_watch_reports_new_problem_once(tmp_path, monkeypatch):
+    known = tmp_path / "known.txt"
+    seen = []
+
+    def triage(events, known=()):
+        seen.append(list(known))
+        return {"results": [{"action": "report" if not known else "known"}]}
+    monkeypatch.setattr(m, "gate_triage", triage)
+    text, code = m.watch("freshness", _cmd(1, "Suite Landing: HTTP 404"), known)
+    assert code == 0 and text.startswith("freshness: exit 1.") and "Suite Landing" in text
+    assert "Suite Landing" in known.read_text(encoding="utf-8")
+    assert m.watch("freshness", _cmd(1, "Suite Landing: HTTP 404"), known) == ("", 0)
+    assert seen[0] == [] and "Suite Landing" in seen[1][0]
+
+
+def test_watch_reports_when_jev_fails(tmp_path, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("no key")
+    monkeypatch.setattr(m, "gate_triage", boom)
+    text, code = m.watch("x", _cmd(2, "MONITOR BROKEN"), tmp_path / "k.txt")
+    assert code == 0 and "MONITOR BROKEN" in text and "Jev unavailable" in text
+
+
+def test_watch_known_list_is_bounded(tmp_path, monkeypatch):
+    known = tmp_path / "known.txt"
+    known.write_text("\n".join(f"p{i}" for i in range(m.KNOWN_MAX)) + "\n", encoding="utf-8")
+    monkeypatch.setattr(m, "gate_triage", lambda events, known=(): {"results": [{"action": "act"}]})
+    m.watch("x", _cmd(1, "new"), known)
+    lines = known.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == m.KNOWN_MAX and lines[-1].startswith("x: new") and lines[0] == "p1"

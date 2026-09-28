@@ -32,6 +32,11 @@ Rules:
   Run the script without an agent and, on a non-zero exit, call Gate from the script:
   `python jev_mcp.py --gate triage < request.json` prints the same decision as the MCP
   tool (`--gate verdict|decide|pick` likewise). The JSON object holds the tool's arguments.
+- For a recurring check the whole job can be one line with no agent at all:
+  `python jev_mcp.py --watch --name "<job>" --known-file <path> -- <check command>`.
+  Exit 0 prints nothing; a failure is triaged by Jev and printed only when it is new, then
+  remembered in the known file until the check passes again. Use it as the script of a
+  script-only scheduled job (Hermes `no_agent`), where empty output means a silent run.
 - A timer that resumes an idle coordinator should feed `gate_triage` the state files'
   changed lines and resume only on `act`.
 - Owner policy defaults to: decide and act alone; ask only for irreversible, paid, outward,
@@ -212,6 +217,12 @@ Hermes setup is conditional. POSIX setup is conditional for all three harnesses:
 | Claude Code | `~/.claude/skills/jev/` | `claude mcp add` |
 | Codex | `~/.agents/skills/jev/` | `codex mcp add` (`~/.codex/config.toml`) |
 | Hermes | `$HERMES_HOME/skills/jev/`, or `~/.hermes/skills/jev/` | `hermes mcp add` |
+
+To use one shared, always-on server instead of a local copy, set `JEV_MCP_URL` (for example
+`http://<tailnet-ip>:8765/mcp`) before running the installer; it registers that URL with
+every harness. The server host runs `jev_mcp.py --http --host <ip> --port 8765` and holds
+the key. Loop `workdir` and `checks` then run on the server host, so start Loop runs for
+projects that live there; Gate works from any machine.
 
 Then restart the harness / start a new session. In Codex, the skill is invoked with
 `/skills` or `$jev` (and it also triggers on the description).

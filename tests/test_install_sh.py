@@ -105,3 +105,17 @@ def test_installer_migrates_legacy_skills_for_all_harnesses(sandbox):
         installed = home / harness / "skills" / "jev"
         for relative in ("SKILL.md", "route.py", "git_decide.py", "agents/openai.yaml"):
             assert (installed / relative).read_bytes() == (ROOT / "skill" / "jev" / relative).read_bytes()
+
+
+def test_shared_server_url_registers_http_for_every_harness(sandbox):
+    """JEV_MCP_URL: every harness points at the shared server; no local server, no local check."""
+    tmp_path, home, log = sandbox
+    url = "http://100.64.0.1:8765/mcp"
+    env = {"HOME": str(home), "PATH": f"{tmp_path}/.venv/bin:{tmp_path}/bin:/usr/bin:/bin", "JEV_MCP_URL": url}
+    r = subprocess.run(["bash", "install.sh"], cwd=tmp_path, env=env, capture_output=True, text=True)
+    calls = log.read_text(encoding="utf-8")
+    assert r.returncode == 0, r.stderr
+    assert f"claude mcp add --transport http jev-loop --scope user {url}" in calls
+    assert f"codex mcp add jev-loop --url {url}" in calls
+    assert f"hermes mcp add jev-loop --url {url}" in calls
+    assert "jev_mcp.py" not in calls and "Skipping the local check" in r.stdout

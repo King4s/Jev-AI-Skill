@@ -11,10 +11,15 @@ python install_skill.py skill/jev $skillRoot --legacy jev-loop jev-route jev-git
 if ($LASTEXITCODE -ne 0) { throw "Claude Code skill installation failed." }
 
 $server = Join-Path $PSScriptRoot "jev_mcp.py"
+# JEV_MCP_URL points every harness at one shared, always-on server (python jev_mcp.py --http)
+# instead of starting a local copy; the key then lives only on that server.
+$mcpUrl = $env:JEV_MCP_URL
+$target = if ($mcpUrl) { $mcpUrl } else { $server }
 if (Get-Command claude -ErrorAction SilentlyContinue) {
     claude mcp remove jev-loop --scope user 2>$null | Out-Null
-    claude mcp add jev-loop --scope user -- python $server
-    Write-Host "MCP server registered: jev-loop -> $server (Claude Code)"
+    if ($mcpUrl) { claude mcp add --transport http jev-loop --scope user $mcpUrl }
+    else { claude mcp add jev-loop --scope user -- python $server }
+    Write-Host "MCP server registered: jev-loop -> $target (Claude Code)"
 } else {
     Write-Host "claude not on PATH - skipping Claude Code MCP setup."
 }
@@ -26,8 +31,9 @@ if (Get-Command codex -ErrorAction SilentlyContinue) {
     if ($LASTEXITCODE -ne 0) { throw "Codex skill installation failed." }
 
     codex mcp remove jev-loop 2>$null | Out-Null
-    codex mcp add jev-loop -- python $server
-    Write-Host "MCP server registered: jev-loop -> $server (Codex)"
+    if ($mcpUrl) { codex mcp add jev-loop --url $mcpUrl }
+    else { codex mcp add jev-loop -- python $server }
+    Write-Host "MCP server registered: jev-loop -> $target (Codex)"
 } else {
     Write-Host "codex not on PATH - skipping Codex setup."
 }
@@ -49,14 +55,17 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
         $hermesEnvArgs = @("--env", 'TYPESAFE_API_KEY=${TYPESAFE_API_KEY}')
     }
     hermes mcp remove jev-loop 2>$null | Out-Null
-    "y`n" | hermes mcp add jev-loop --command python @hermesEnvArgs --args $server
-    Write-Host "MCP server registered: jev-loop -> $server (start a new Hermes session)"
+    if ($mcpUrl) { "y`n" | hermes mcp add jev-loop --url $mcpUrl }
+    else { "y`n" | hermes mcp add jev-loop --command python @hermesEnvArgs --args $server }
+    Write-Host "MCP server registered: jev-loop -> $target (start a new Hermes session)"
 } else {
     Write-Host "hermes not on PATH - skipping Hermes setup."
 }
 
 $keyFile = Join-Path $HOME ".config\jev-loop\typesafe_api_key"
-if (-not [Environment]::GetEnvironmentVariable("TYPESAFE_API_KEY", "User") -and -not $env:TYPESAFE_API_KEY -and -not (Test-Path $keyFile)) {
+if ($mcpUrl) {
+    Write-Host "Using the shared server at $mcpUrl; its host holds the TypeSafe key. Skipping the local check."
+} elseif (-not [Environment]::GetEnvironmentVariable("TYPESAFE_API_KEY", "User") -and -not $env:TYPESAFE_API_KEY -and -not (Test-Path $keyFile)) {
     Write-Warning "No TypeSafe key. Set TYPESAFE_API_KEY (user env) or write it to $keyFile, then restart Claude Code."
 } else {
     python $server --check
