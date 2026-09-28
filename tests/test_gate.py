@@ -318,3 +318,13 @@ def test_watch_known_list_is_bounded(tmp_path, monkeypatch):
     m.watch("x", _cmd(1, "new"), known)
     lines = known.read_text(encoding="utf-8").splitlines()
     assert len(lines) == m.KNOWN_MAX and lines[-1] == "x: exit 1: new" and lines[0] == "p1"
+
+
+def test_runs_dir_env_then_local_then_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("JEV_RUNS_DIR", str(tmp_path / "custom"))
+    assert m.runs_dir() == tmp_path / "custom"
+    monkeypatch.delenv("JEV_RUNS_DIR")
+    monkeypatch.setattr(m, "ROOT", tmp_path)
+    assert m.runs_dir() == tmp_path / "runs"
+    monkeypatch.setattr(m.os, "access", lambda p, mode: False)
+    assert m.runs_dir() == Path.home() / ".local" / "state" / "jev-loop" / "runs"

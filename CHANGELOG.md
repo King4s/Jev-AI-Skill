@@ -10,6 +10,8 @@ New releases are made with `.\release.ps1`.
   remote server cannot see their goal files or run their checks. With `JEV_MCP_URL` the
   installers now register a local server that forwards only its Jev calls to the shared
   host (`JEV_UPSTREAM`), which answers them on a new `/jev` endpoint with its key.
+- Run state goes to `JEV_RUNS_DIR`, else `runs/` beside the server, else
+  `~/.local/state/jev-loop/runs` when a shared install is read-only for the account.
 
 ## [2026.09.28.1858] - 2026-09-28
 

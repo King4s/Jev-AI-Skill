@@ -28,7 +28,18 @@ from pathlib import Path
 import requests
 
 ROOT = Path(__file__).parent
-RUNS = ROOT / "runs"
+def runs_dir():
+    """Where run state lives: JEV_RUNS_DIR, else runs/ beside this file, else - for a shared,
+    read-only install used by several accounts - ~/.local/state/jev-loop/runs."""
+    if os.environ.get("JEV_RUNS_DIR"):
+        return Path(os.environ["JEV_RUNS_DIR"])
+    local = ROOT / "runs"
+    if os.access(local if local.exists() else ROOT, os.W_OK):
+        return local
+    return Path.home() / ".local" / "state" / "jev-loop" / "runs"
+
+
+RUNS = runs_dir()
 API = "https://api.typesafe.ai/v1/systemone"
 RETRY_STATUS = {429, 529}
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip() if (ROOT / "VERSION").exists() else "dev"
@@ -188,7 +199,7 @@ class Run:
         cfg.setdefault("max_consecutive_failures", 4)
         cfg.setdefault("check_timeout", 300)
 
-        RUNS.mkdir(exist_ok=True)
+        RUNS.mkdir(parents=True, exist_ok=True)
         run_id = time.strftime("%Y%m%d-%H%M%S")
         n = 1
         while (RUNS / f"{run_id}.state.json").exists():
