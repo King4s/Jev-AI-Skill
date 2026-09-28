@@ -196,17 +196,32 @@ def test_watch_is_silent_on_success_and_clears_known(tmp_path, monkeypatch):
 
 def test_watch_reports_new_problem_once(tmp_path, monkeypatch):
     known = tmp_path / "known.txt"
-    seen = []
+    asked = []
 
     def triage(events, known=()):
-        seen.append(list(known))
-        return {"results": [{"action": "report" if not known else "known"}]}
+        asked.append(events[0]["summary"])
+        return {"results": [{"action": "report"}]}
     monkeypatch.setattr(m, "gate_triage", triage)
-    text, code = m.watch("freshness", _cmd(1, "Suite Landing: HTTP 404"), known)
-    assert code == 0 and text.startswith("freshness: exit 1.") and "Suite Landing" in text
-    assert "Suite Landing" in known.read_text(encoding="utf-8")
-    assert m.watch("freshness", _cmd(1, "Suite Landing: HTTP 404"), known) == ("", 0)
-    assert seen[0] == [] and "Suite Landing" in seen[1][0]
+    run1 = "Report 2026-09-28 03:03 UTC\n  ok Email: HTTP 200\n  🔴 Suite Landing: HTTP 404\ndone in 1.2s"
+    run2 = "Report 2026-09-28 04:03 UTC\n  ok Email: HTTP 200\n  🔴 Suite Landing: HTTP 404\ndone in 3.4s"
+    text, code = m.watch("freshness", _cmd(1, run1), known)
+    assert code == 0 and text == "freshness: exit 1. 🔴 Suite Landing: HTTP 404"
+    assert m.watch("freshness", _cmd(1, run2), known) == ("", 0), "same problem, new clock time"
+    assert asked == ["🔴 Suite Landing: HTTP 404"], "an identical repeat must not reach Jev"
+    assert m.watch("freshness", _cmd(1, "🔴 Auth: HTTP 500"), known)[0].endswith("Auth: HTTP 500")
+
+
+def test_watch_remembers_what_jev_calls_known(tmp_path, monkeypatch):
+    known = tmp_path / "known.txt"
+    monkeypatch.setattr(m, "gate_triage", lambda events, known=(): {"results": [{"action": "known"}]})
+    assert m.watch("x", _cmd(1, "ERROR: same as before, reworded"), known) == ("", 0)
+    assert "reworded" in known.read_text(encoding="utf-8")
+
+
+def test_issue_summary_prefers_problem_lines_and_drops_clock_times():
+    out = "start 2026-09-28T02:35:31.668521+00:00\nA ok\nB FAILED at 12:01:02\nC ok\n"
+    assert m._issue_summary(out) == "B FAILED at #"
+    assert m._issue_summary("line1\nline2") == "line1 | line2"
 
 
 def test_watch_reports_when_jev_fails(tmp_path, monkeypatch):
@@ -215,6 +230,16 @@ def test_watch_reports_when_jev_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "gate_triage", boom)
     text, code = m.watch("x", _cmd(2, "MONITOR BROKEN"), tmp_path / "k.txt")
     assert code == 0 and "MONITOR BROKEN" in text and "Jev unavailable" in text
+    assert m.watch("x", _cmd(2, "MONITOR BROKEN"), tmp_path / "k.txt") == ("", 0), "reported once"
+
+
+def test_unwritable_gate_tape_does_not_break_a_decision(tmp_path, monkeypatch):
+    blocker = tmp_path / "file"
+    blocker.write_text("x", encoding="utf-8")
+    monkeypatch.setattr(m, "GATE_TAPE", blocker / "gate.jsonl")  # parent is a file
+    jev, _ = answers(lambda k, q: choice("ignore"))
+    monkeypatch.setattr(m, "jev", jev)
+    assert m.gate_triage([{"summary": "ok"}])["skip_agent"] is True
 
 
 def test_watch_known_list_is_bounded(tmp_path, monkeypatch):
@@ -223,4 +248,4 @@ def test_watch_known_list_is_bounded(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "gate_triage", lambda events, known=(): {"results": [{"action": "act"}]})
     m.watch("x", _cmd(1, "new"), known)
     lines = known.read_text(encoding="utf-8").splitlines()
-    assert len(lines) == m.KNOWN_MAX and lines[-1].startswith("x: new") and lines[0] == "p1"
+    assert len(lines) == m.KNOWN_MAX and lines[-1] == "x: exit 1: new" and lines[0] == "p1"

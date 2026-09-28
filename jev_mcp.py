@@ -439,10 +439,14 @@ def _clip(text, n):
 
 
 def _gate_log(tool, **kw):
-    RUNS.mkdir(exist_ok=True)
+    """Best effort: an unwritable tape must never turn a decision into an error."""
     rec = {"t": time.strftime("%Y-%m-%d %H:%M:%S"), "tool": tool, **kw}
-    with open(GATE_TAPE, "a", encoding="utf-8") as f:
-        f.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
+    try:
+        GATE_TAPE.parent.mkdir(parents=True, exist_ok=True)
+        with open(GATE_TAPE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
+    except OSError:
+        pass
 
 
 def _choice(answer, allowed, fallback):
@@ -710,6 +714,17 @@ def self_check():
 
 
 KNOWN_MAX = 20
+_PROBLEM = re.compile(r"🔴|❌|✗|⚠|\b(FAIL(?:ED|URE)?|ERROR|Error|error|BROKEN|CRITICAL|DRIFT|Traceback|"
+                      r"Exception|HTTP [45]\d\d|timed? ?out|TIMEOUT|refused|denied)\b")
+_STAMP = re.compile(r"\d{4}-\d{2}-\d{2}[T ]?\d{0,2}:?\d{0,2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2}| ?UTC)?")
+
+
+def _issue_summary(out):
+    """The problem lines of a check's output (or its last lines), without clock times, so the
+    same problem gives the same text on every run."""
+    lines = [ln.strip() for ln in out.splitlines() if ln.strip()]
+    picked = [ln for ln in lines if _PROBLEM.search(ln)] or lines[-8:]
+    return _clip(_VOLATILE.sub("#", _STAMP.sub("#", " | ".join(dict.fromkeys(picked)))), SUMMARY_CHARS)
 
 
 def watch(name, cmd, known_file, expected="exit 0", timeout=300):
@@ -731,22 +746,25 @@ def watch(name, cmd, known_file, expected="exit 0", timeout=300):
         if known_path.exists():
             known_path.unlink()
         return "", 0
-    tail = _clip(out[-SUMMARY_CHARS * 2:], SUMMARY_CHARS)
+    tail = _issue_summary(out)
     known = [k for k in known_path.read_text(encoding="utf-8").splitlines() if k.strip()] \
         if known_path.exists() else []
+    fingerprint = _clip(f"{name}: exit {rc}: {tail}", ITEM_CHARS)
+    if fingerprint in known:
+        return "", 0  # the identical problem was already reported: a fact, not a question
     message = f"{name}: exit {rc}. {tail}"
+    note = ""
     try:
         res = gate_triage([{"kind": "scheduled check", "source": name, "summary": tail,
                             "exit_code": rc, "expected": expected}], known=known)
         action = res["results"][0]["action"]
     except Exception as e:  # noqa: BLE001 - report the failure rather than guess
-        return f"{message}\n(Jev unavailable: {type(e).__name__}; reported without triage)", 0
+        action, note = "report", f"\n(Jev unavailable: {type(e).__name__}; reported without triage)"
+    known_path.parent.mkdir(parents=True, exist_ok=True)
+    known_path.write_text("\n".join((known + [fingerprint])[-KNOWN_MAX:]) + "\n", encoding="utf-8")
     if action in ("ignore", "known"):
         return "", 0
-    known_path.parent.mkdir(parents=True, exist_ok=True)
-    known_path.write_text("\n".join((known + [_clip(f'{name}: {tail}', ITEM_CHARS)])[-KNOWN_MAX:]) + "\n",
-                          encoding="utf-8")
-    return message, 0
+    return message + note, 0
 
 
 def serve_http(host, port):
