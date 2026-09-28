@@ -3,9 +3,10 @@
 # Install (as root) on the always-on host:
 #   cp deploy/jev-loop-http.service /etc/systemd/system/
 #   systemctl daemon-reload && systemctl enable --now jev-loop-http
-#   curl -s -o /dev/null -w '%{http_code}\n' http://<tailnet-ip>:8765/mcp   # 405/406 = alive
+#   curl -s -m 5 -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' \
+#     -d '{}' http://<tailnet-ip>:8765/mcp   # any status (400) = alive; a plain GET never ends
 #
-# Adjust User, WorkingDirectory and --host. Bind to the host's tailnet address only:
+# Replace TAILNET_IP with the host's tailnet address; adjust User and WorkingDirectory. Bind to the host's tailnet address only:
 # the server has no authentication of its own and holds the TypeSafe key.
 [Unit]
 Description=jev-loop MCP server (Jev Loop and Gate) over HTTP for the tailnet
@@ -17,7 +18,7 @@ Type=simple
 User=hermes
 Group=ai-agents
 WorkingDirectory=/home/hermes/jev-loop
-ExecStart=/home/hermes/jev-loop/.venv/bin/python /home/hermes/jev-loop/jev_mcp.py --http --host 100.71.244.124 --port 8765
+ExecStart=/home/hermes/jev-loop/.venv/bin/python /home/hermes/jev-loop/jev_mcp.py --http --host TAILNET_IP --port 8765
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

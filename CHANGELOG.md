@@ -5,6 +5,15 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Changed
+- Documented how to run the shared HTTP server in practice (README, skill, AGENTS):
+  Loop's `workdir` and `checks` run on the server host, every reinstall must keep
+  `JEV_MCP_URL` or the machine returns to a local server, how to update the host and
+  clients, how to check the server, and `~/.local/bin` on `PATH` over non-interactive SSH.
+- `deploy/jev-loop-http.service` uses a `TAILNET_IP` placeholder instead of a concrete
+  address, and its liveness check now matches the server (a POST returns 400; a GET
+  never ends).
+
 ## [2026.09.28.1642] - 2026-09-28
 
 ### Fixed

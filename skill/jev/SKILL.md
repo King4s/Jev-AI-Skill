@@ -234,7 +234,10 @@ To use one shared, always-on server instead of a local copy, set `JEV_MCP_URL` (
 `http://<tailnet-ip>:8765/mcp`) before running the installer; it registers that URL with
 every harness. The server host runs `jev_mcp.py --http --host <ip> --port 8765` and holds
 the key. Loop `workdir` and `checks` then run on the server host, so start Loop runs for
-projects that live there; Gate works from any machine.
+projects that live there; Gate works from any machine. If `loop_start` or a check fails
+because the `workdir` does not exist, the project is on a client the server cannot see:
+say so instead of retrying. Rerun the installer with the same `JEV_MCP_URL` on every
+update; without it the machine is switched back to a local server.
 
 Then restart the harness / start a new session. In Codex, the skill is invoked with
 `/skills` or `$jev` (and it also triggers on the description).

@@ -84,6 +84,15 @@ Versions use local date and time: `yyyy.mm.dd.hhmm`. Release meaningful changes 
 section, then updates `VERSION` and the changelog, commits, tags, pushes and creates a
 GitHub release. Do not edit `VERSION` by hand.
 
+After a release, roll it out where the owner runs it. When the owner uses one shared
+HTTP server (`deploy/jev-loop-http.service`), pull the server's own clone and restart the
+unit if `jev_mcp.py` or its dependencies changed; then, on each client, `git pull` and
+rerun the installer **with the same `JEV_MCP_URL`** (without it the installer registers a
+local server instead). Over non-interactive SSH, put `~/.local/bin` on `PATH` so the
+installer finds `claude`, `codex` and `hermes`. Verify with `claude mcp list` /
+`codex mcp list` and one `curl` against the server (see README). Host names, addresses
+and the list of machines are private: keep them in the operator's notes, not here.
+
 ## Owner-only access
 
 The owner handles TypeSafe API key setup if no key is available and GitHub OAuth scope

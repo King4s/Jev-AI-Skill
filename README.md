@@ -114,6 +114,31 @@ the TypeSafe key lives only on the server host. The HTTP server has no authentic
 its own, so bind it to a private address such as a Tailscale IP. Loop runs are stored on
 the server, and their `workdir` and `checks` refer to paths on the server host.
 
+What that means in practice:
+
+- **Loop runs on the server host.** A goal's `workdir` must exist there and its `checks`
+  run there, so a Loop for a project that lives only on a client machine cannot run its
+  checks through the shared server. Keep such projects on the server host, or keep a
+  local install (no `JEV_MCP_URL`) on the machine that holds them. Gate, Route and Git
+  work from any client.
+- **Keep `JEV_MCP_URL` set on every reinstall.** The installers replace the registration
+  each time; running one without `JEV_MCP_URL` switches that machine back to a local
+  server. That is also how to leave the shared server on purpose.
+- **Updating.** On the server host, pull its clone and restart the service
+  (`systemctl restart jev-loop-http`); the tools are served from that clone. On each
+  client, `git pull` and rerun the installer with the same `JEV_MCP_URL` to refresh the
+  skill copies. Restart harness sessions afterwards.
+- **Checking the server.** `systemctl status jev-loop-http` on the host. From a client,
+  any HTTP status means it is up: `curl -s -m 5 -o /dev/null -w '%{http_code}\n' -X POST
+  -H 'Content-Type: application/json' -d '{}' http://<tailnet-ip>:8765/mcp` prints `400`.
+  A plain `GET` keeps the stream open, so always pass a timeout. `claude mcp list` should
+  show `jev-loop: http://<tailnet-ip>:8765/mcp (HTTP) - ✔ Connected`.
+- **Non-interactive shells.** Over SSH without a login shell, CLIs installed in
+  `~/.local/bin` are often not on `PATH`, and the installer then prints `not on PATH -
+  skipping` for them. Prefix the run with `PATH="$HOME/.local/bin:$PATH"`.
+- **Older Hermes.** Releases without `--connect-timeout` (seen with v0.17) are handled:
+  `install.sh` retries the registration without the flag.
+
 The key file can also be used by the helpers. In Hermes, the installer passes an
 environment reference only when its `.env` contains a `TYPESAFE_API_KEY`; otherwise the
 server reads the key file itself.
