@@ -119,3 +119,9 @@ def test_shared_server_url_registers_http_for_every_harness(sandbox):
     assert f"codex mcp add jev-loop --url {url}" in calls
     assert f"hermes mcp add jev-loop --url {url} --connect-timeout 20" in calls
     assert "jev_mcp.py" not in calls and "Skipping the local check" in r.stdout
+
+
+def test_install_sh_answers_hermes_remove_prompt():
+    """`hermes mcp remove` prompts [Y/n]; run from a terminal it would wait forever."""
+    text = (ROOT / "install.sh").read_text(encoding="utf-8")
+    assert r"printf 'y\n' | hermes mcp remove jev-loop" in text

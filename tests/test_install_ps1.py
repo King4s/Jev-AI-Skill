@@ -38,3 +38,9 @@ def test_install_ps1_supports_shared_server_url():
     assert "claude mcp add --transport http jev-loop --scope user $mcpUrl" in text
     assert "codex mcp add jev-loop --url $mcpUrl" in text
     assert '"n`ny`n" | hermes mcp add jev-loop --url $mcpUrl' in text
+
+
+def test_install_ps1_answers_hermes_remove_prompt():
+    """`hermes mcp remove` prompts [Y/n]; an unanswered prompt hangs the installer."""
+    text = PS1.read_text(encoding="utf-8")
+    assert '"y`n" | hermes mcp remove jev-loop' in text

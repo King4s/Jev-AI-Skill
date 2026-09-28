@@ -68,7 +68,8 @@ if command -v hermes >/dev/null 2>&1; then
   if grep -q '^TYPESAFE_API_KEY=.' "$HERMES_HOME/.env" 2>/dev/null; then
     env_args=(--env 'TYPESAFE_API_KEY=${TYPESAFE_API_KEY}')
   fi
-  hermes mcp remove jev-loop >/dev/null 2>&1 || true
+  # `hermes mcp remove` asks "Remove server? [Y/n]" and waits when run from a terminal.
+  printf 'y\n' | hermes mcp remove jev-loop >/dev/null 2>&1 || true
   if [ -n "$MCP_URL" ]; then
     # For a URL Hermes first asks whether the server needs authentication (it does not: bind it
     # to a private address), then whether to enable its tools.

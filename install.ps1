@@ -54,7 +54,8 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
     if ((Test-Path $hermesEnvFile) -and (Select-String -Path $hermesEnvFile -Pattern '^TYPESAFE_API_KEY=.' -Quiet)) {
         $hermesEnvArgs = @("--env", 'TYPESAFE_API_KEY=${TYPESAFE_API_KEY}')
     }
-    hermes mcp remove jev-loop 2>$null | Out-Null
+    # `hermes mcp remove` asks "Remove server? [Y/n]" and waits on a console stdin.
+    "y`n" | hermes mcp remove jev-loop 2>$null | Out-Null
     # For a URL Hermes first asks whether the server needs authentication (it does not: bind it
     # to a private address), then whether to enable its tools.
     if ($mcpUrl) { "n`ny`n" | hermes mcp add jev-loop --url $mcpUrl --connect-timeout 20 }
