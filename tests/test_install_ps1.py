@@ -35,9 +35,10 @@ def test_install_ps1_sets_up_codex():
 def test_install_ps1_supports_shared_server_url():
     text = PS1.read_text(encoding="utf-8")
     assert "$env:JEV_MCP_URL" in text
-    assert "claude mcp add --transport http jev-loop --scope user $mcpUrl" in text
-    assert "codex mcp add jev-loop --url $mcpUrl" in text
-    assert '"n`ny`n" | hermes mcp add jev-loop --url $mcpUrl' in text
+    assert 'claude mcp add jev-loop --scope user -e "JEV_UPSTREAM=$mcpUrl" -- python $server' in text
+    assert 'codex mcp add jev-loop --env "JEV_UPSTREAM=$mcpUrl" -- python $server' in text
+    assert '$hermesEnvArgs = @("--env", "JEV_UPSTREAM=$mcpUrl")' in text
+    assert "--url" not in text and "--transport http" not in text
 
 
 def test_install_ps1_answers_hermes_remove_prompt():

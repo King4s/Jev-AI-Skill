@@ -107,35 +107,23 @@ def test_installer_migrates_legacy_skills_for_all_harnesses(sandbox):
             assert (installed / relative).read_bytes() == (ROOT / "skill" / "jev" / relative).read_bytes()
 
 
-def test_shared_server_url_registers_http_for_every_harness(sandbox):
-    """JEV_MCP_URL: every harness points at the shared server; no local server, no local check."""
+def test_shared_server_url_registers_a_local_server_that_forwards_jev(sandbox):
+    """JEV_MCP_URL: each harness still runs jev_mcp.py locally (Loop needs local goal files and
+    checks) and forwards only its Jev calls to the shared server through JEV_UPSTREAM."""
     tmp_path, home, log = sandbox
     url = "http://100.64.0.1:8765/mcp"
     env = {"HOME": str(home), "PATH": f"{tmp_path}/.venv/bin:{tmp_path}/bin:/usr/bin:/bin", "JEV_MCP_URL": url}
     r = subprocess.run(["bash", "install.sh"], cwd=tmp_path, env=env, capture_output=True, text=True)
     calls = log.read_text(encoding="utf-8")
+    py, server = f"{tmp_path}/.venv/bin/python", f"{tmp_path}/jev_mcp.py"
     assert r.returncode == 0, r.stderr
-    assert f"claude mcp add --transport http jev-loop --scope user {url}" in calls
-    assert f"codex mcp add jev-loop --url {url}" in calls
-    assert f"hermes mcp add jev-loop --url {url} --connect-timeout 20" in calls
-    assert "jev_mcp.py" not in calls and "Skipping the local check" in r.stdout
+    assert f"claude mcp add jev-loop --scope user -e JEV_UPSTREAM={url} -- {py} {server}" in calls
+    assert f"codex mcp add jev-loop --env JEV_UPSTREAM={url} -- {py} {server}" in calls
+    assert f"hermes mcp add jev-loop --command {py} --env JEV_UPSTREAM={url} --args {server}" in calls
+    assert "--url" not in calls and "--transport http" not in calls
 
 
 def test_install_sh_answers_hermes_remove_prompt():
     """`hermes mcp remove` prompts [Y/n]; run from a terminal it would wait forever."""
     text = (ROOT / "install.sh").read_text(encoding="utf-8")
     assert r"printf 'y\n' | hermes mcp remove jev-loop" in text
-
-
-def test_shared_server_url_works_with_hermes_without_connect_timeout(sandbox):
-    """Hermes v0.17 has no --connect-timeout: fall back to registering without it."""
-    tmp_path, home, log = sandbox
-    old = tmp_path / "bin" / "hermes"
-    old.write_text('#!/bin/sh\necho "$0 $*" >> "' + str(log) + '"\n'
-                   'case "$*" in *--connect-timeout*) exit 2 ;; esac\nexit 0\n', encoding="utf-8")
-    url = "http://100.64.0.1:8765/mcp"
-    env = {"HOME": str(home), "PATH": f"{tmp_path}/.venv/bin:{tmp_path}/bin:/usr/bin:/bin", "JEV_MCP_URL": url}
-    r = subprocess.run(["bash", "install.sh"], cwd=tmp_path, env=env, capture_output=True, text=True)
-    calls = log.read_text(encoding="utf-8").splitlines()
-    assert r.returncode == 0, r.stderr
-    assert any(line.endswith(f"hermes mcp add jev-loop --url {url}") for line in calls)
