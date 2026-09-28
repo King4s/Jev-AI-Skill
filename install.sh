@@ -69,9 +69,13 @@ if command -v hermes >/dev/null 2>&1; then
     env_args=(--env 'TYPESAFE_API_KEY=${TYPESAFE_API_KEY}')
   fi
   hermes mcp remove jev-loop >/dev/null 2>&1 || true
-  printf 'y\n' | hermes mcp add jev-loop --command "$ROOT/.venv/bin/python" \
-    ${env_args[@]+"${env_args[@]}"} --args "$ROOT/jev_mcp.py"
-  echo "MCP server registered: jev-loop -> $ROOT/jev_mcp.py (start a new Hermes session)"
+  if [ -n "$MCP_URL" ]; then
+    printf 'y\n' | hermes mcp add jev-loop --url "$MCP_URL"
+  else
+    printf 'y\n' | hermes mcp add jev-loop --command "$ROOT/.venv/bin/python" \
+      ${env_args[@]+"${env_args[@]}"} --args "$ROOT/jev_mcp.py"
+  fi
+  echo "MCP server registered: jev-loop -> $TARGET (start a new Hermes session)"
 else
   echo "hermes not on PATH - skipping Hermes setup."
 fi
