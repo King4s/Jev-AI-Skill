@@ -5,6 +5,8 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+## [2026.09.28.1826] - 2026-09-28
+
 ### Changed
 - Documented how to run the shared HTTP server in practice (README, skill, AGENTS):
   Loop's `workdir` and `checks` run on the server host, every reinstall must keep
