@@ -180,6 +180,73 @@ def test_http_mode_serves_stateless_streamable_http(monkeypatch):
                      "kw": {"host": "100.64.0.1", "port": 8765, "stateless_http": True}}
 
 
+# ---------- upstream forwarding ----------
+
+def test_upstream_url_accepts_base_or_mcp_url(monkeypatch):
+    monkeypatch.delenv("JEV_MCP_URL", raising=False)
+    monkeypatch.delenv("JEV_UPSTREAM", raising=False)
+    assert m.upstream_url() is None
+    monkeypatch.setenv("JEV_UPSTREAM", "http://100.64.0.1:8765/mcp")
+    assert m.upstream_url() == "http://100.64.0.1:8765/jev"
+    monkeypatch.setenv("JEV_UPSTREAM", "http://100.64.0.1:8765/")
+    assert m.upstream_url() == "http://100.64.0.1:8765/jev"
+
+
+def test_jev_forwards_to_upstream_without_a_local_key(monkeypatch):
+    monkeypatch.setenv("JEV_UPSTREAM", "http://100.64.0.1:8765/mcp")
+    monkeypatch.setattr(m, "api_key", lambda: pytest.fail("no local key when forwarding"))
+    sent = {}
+
+    class R:
+        status_code = 200
+        def json(self):
+            return {"model": "jev", "answers": {"ok": {"noul": 0.9}}}
+
+    def post(url, timeout, json):
+        sent["url"], sent["body"] = url, json
+        return R()
+    monkeypatch.setattr(m.requests, "post", post)
+    out = m.jev("jev-latest", {"s": 1}, {"ok": {"type": "noul"}})
+    assert out["answers"]["ok"]["noul"] == 0.9
+    assert sent == {"url": "http://100.64.0.1:8765/jev",
+                    "body": {"model": "jev-latest", "state": {"s": 1}, "questions": {"ok": {"type": "noul"}}}}
+
+
+def test_jev_upstream_error_is_a_failed_decision(monkeypatch):
+    monkeypatch.setenv("JEV_UPSTREAM", "http://100.64.0.1:8765")
+
+    class R:
+        status_code = 502
+        text = "boom"
+    monkeypatch.setattr(m.requests, "post", lambda *a, **k: R())
+    with pytest.raises(RuntimeError, match="upstream HTTP 502"):
+        m.jev("jev-latest", {}, {"q": {}})
+
+
+def test_jev_endpoint_answers_validates_and_refuses_to_chain(monkeypatch):
+    import asyncio
+    monkeypatch.delenv("JEV_UPSTREAM", raising=False)
+    monkeypatch.delenv("JEV_MCP_URL", raising=False)
+    monkeypatch.setattr(m, "jev", lambda model, state, qs: {"model": model, "answers": {"q": state}})
+    ok = asyncio.run(m.jev_forward({"model": "jev-latest", "state": "s", "questions": {"q": {}}}))
+    assert ok == (200, {"model": "jev-latest", "answers": {"q": "s"}})
+    assert asyncio.run(m.jev_forward({"state": "s"}))[0] == 400
+    assert asyncio.run(m.jev_forward(None))[0] == 400
+
+    def boom(*a):
+        raise RuntimeError("no key")
+    monkeypatch.setattr(m, "jev", boom)
+    assert asyncio.run(m.jev_forward({"state": "s", "questions": {}}))[0] == 502
+    monkeypatch.setenv("JEV_UPSTREAM", "http://elsewhere:8765")
+    assert asyncio.run(m.jev_forward({"state": "s", "questions": {}}))[0] == 508
+
+
+def test_http_app_serves_the_jev_route():
+    pytest.importorskip("mcp")
+    app = m.build_server().streamable_http_app(stateless_http=True)
+    assert "/jev" in {getattr(r, "path", None) for r in app.routes}
+
+
 # ---------- watch ----------
 
 def _cmd(code, text):

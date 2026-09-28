@@ -5,6 +5,12 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Fixed
+- Loop failed with "file not found" on machines pointed at the shared server, because the
+  remote server cannot see their goal files or run their checks. With `JEV_MCP_URL` the
+  installers now register a local server that forwards only its Jev calls to the shared
+  host (`JEV_UPSTREAM`), which answers them on a new `/jev` endpoint with its key.
+
 ## [2026.09.28.1858] - 2026-09-28
 
 ### Changed

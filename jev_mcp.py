@@ -49,7 +49,31 @@ def api_key():
     return key
 
 
+def upstream_url():
+    """The shared server's Jev endpoint, when this server forwards Jev calls instead of holding
+    the key: JEV_UPSTREAM (or the installers' JEV_MCP_URL), given as http://host:port or .../mcp."""
+    url = (os.environ.get("JEV_UPSTREAM") or os.environ.get("JEV_MCP_URL") or "").strip().rstrip("/")
+    if not url:
+        return None
+    return (url[:-4] if url.endswith("/mcp") else url) + "/jev"
+
+
 def jev(model, state, questions, retries=4):
+    up = upstream_url()
+    if up:
+        # Loop and Gate run here, next to the files and checks; only the Jev call goes to the
+        # shared server, which holds the TypeSafe key.
+        for attempt in range(retries + 1):
+            try:
+                r = requests.post(up, timeout=90, json={"model": model, "state": state, "questions": questions})
+            except requests.ConnectionError as e:
+                if attempt < retries:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise RuntimeError(f"Jev upstream {up} unreachable: {e}") from e
+            if r.status_code >= 400:
+                raise RuntimeError(f"Jev upstream HTTP {r.status_code}: {r.text[:500]}")
+            return r.json()
     key = api_key()
     for attempt in range(retries + 1):
         r = requests.post(
@@ -700,7 +724,33 @@ def build_server():
         full description."""
         return safe(lambda: globals()["gate_pick"](task, candidates, context))
 
+    @mcp.custom_route("/jev", methods=["POST"])
+    async def jev_endpoint(request):
+        """Served only in --http mode: local jev-loop servers forward their Jev calls here."""
+        from starlette.responses import JSONResponse
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        status, payload = await jev_forward(body)
+        return JSONResponse(payload, status_code=status)
+
     return mcp
+
+
+async def jev_forward(body):
+    """Answer one forwarded Jev call: (HTTP status, JSON payload)."""
+    import anyio
+    if not isinstance(body, dict) or not isinstance(body.get("questions"), dict) or "state" not in body:
+        return 400, {"error": "expected {model, state, questions}"}
+    if upstream_url():
+        return 508, {"error": "this server forwards to another upstream; refusing to chain"}
+    try:
+        raw = await anyio.to_thread.run_sync(
+            jev, str(body.get("model") or "jev-latest"), body["state"], body["questions"])
+    except Exception as e:  # noqa: BLE001 - the caller reports it as a failed decision
+        return 502, {"error": f"{type(e).__name__}: {e}"[:600]}
+    return 200, raw
 
 
 def self_check():
@@ -768,9 +818,11 @@ def watch(name, cmd, known_file, expected="exit 0", timeout=300):
 
 
 def serve_http(host, port):
-    """Serve the same tools over streamable HTTP at http://host:port/mcp, so one always-on
-    machine can host the server for every harness on the tailnet. Stateless: run state is
-    on disk, Gate has none. Bind to a tailnet address; the server has no auth of its own."""
+    """Serve the tools over streamable HTTP at http://host:port/mcp and the Jev forwarding
+    endpoint at /jev, so one always-on machine holds the TypeSafe key for the tailnet. Loop
+    runs through /mcp read goal files and run checks on this host; machines with their own
+    projects run a local server with JEV_UPSTREAM set instead. Bind to a tailnet address;
+    the server has no auth of its own."""
     build_server().run("streamable-http", host=host, port=port, stateless_http=True)
 
 

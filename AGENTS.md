@@ -14,8 +14,10 @@ English; answer the owner in their language.
   to `runs/gate.jsonl`, and the `--gate <name>` command line for scripts without an MCP
   host. Gate inputs are clipped (`SUMMARY_CHARS`, `ITEM_CHARS`, `CONTEXT_CHARS`,
   `MAX_BATCH`); keep them that way. `--http` serves the same tools over stateless
-  streamable HTTP for a shared host (`deploy/jev-loop-http.service`); the installers
-  register `JEV_MCP_URL` instead of a local server when it is set. `--watch` runs a
+  streamable HTTP for a shared host (`deploy/jev-loop-http.service`) plus a `/jev`
+  endpoint that answers forwarded Jev calls with the host's key. With `JEV_MCP_URL` the
+  installers still register a local stdio server, with `JEV_UPSTREAM` set so it forwards
+  only its Jev calls; Loop must stay local because it reads goal files and runs checks. `--watch` runs a
   recurring check as a script-only job: silent on success, a failure is triaged by Jev
   (`gate_triage`) and reported once until the check passes again.
 - `skill/jev/SKILL.md` is the shared skill for Loop (including finding and fixing existing
@@ -91,8 +93,8 @@ GitHub release. Do not edit `VERSION` by hand.
 After a release, roll it out where the owner runs it. When the owner uses one shared
 HTTP server (`deploy/jev-loop-http.service`), pull the server's own clone and restart the
 unit if `jev_mcp.py` or its dependencies changed; then, on each client, `git pull` and
-rerun the installer **with the same `JEV_MCP_URL`** (without it the installer registers a
-local server instead). Over non-interactive SSH, put `~/.local/bin` on `PATH` so the
+rerun the installer **with the same `JEV_MCP_URL`** (without it the local server calls
+TypeSafe with its own key). Over non-interactive SSH, put `~/.local/bin` on `PATH` so the
 installer finds `claude`, `codex` and `hermes`. Verify with `claude mcp list` /
 `codex mcp list` and one `curl` against the server (see README). Host names, addresses
 and the list of machines are private: keep them in the operator's notes, not here.

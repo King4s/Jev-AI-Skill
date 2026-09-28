@@ -26,8 +26,8 @@ Jev keeps large models out of turns a single cheap decision can settle.
   - `gate_pick` chooses a tool, skill or session from one-line descriptions.
 - **`--watch`** runs a recurring check with no agent: silent on success, and a new failure
   is reported once.
-- **`--http` and `JEV_MCP_URL`** let every machine on your private network share one
-  always-on server.
+- **`--http` and `JEV_MCP_URL`** keep the TypeSafe key on one always-on server for your
+  private network, while Loop still runs on each machine next to its own projects.
 - **Route** picks a model tier, a skill and whether to delegate.
 - **Git** recommends commit, push or pull-request steps within repository rules.
 - **`find_code.py`** ranks code-search results so a coding model reads less.
@@ -118,43 +118,45 @@ or start a new session after setup. Run the installer again after `git pull` to 
 
 ### One shared server for several machines
 
-By default every harness starts its own local copy of the server. To let every machine on
-a private network use one always-on server, run it over streamable HTTP on that host and
-point the other machines at it:
+By default every harness starts its own local server, which needs the TypeSafe key on
+that machine. To keep the key on one always-on host instead, run the server over HTTP
+there and point the other machines at it:
 
 ```bash
 # On the always-on host (a systemd unit is in deploy/jev-loop-http.service)
 python jev_mcp.py --http --host <tailnet-ip> --port 8765
 
-# On each client machine, instead of a plain install
+# On each other machine
 JEV_MCP_URL=http://<tailnet-ip>:8765/mcp ./install.sh      # Windows: $env:JEV_MCP_URL=...; .\install.ps1
 ```
 
-With `JEV_MCP_URL` set, both installers still copy the skill, but register the URL with
-Claude Code, Codex and Hermes instead of a local command, and skip the local key check:
-the TypeSafe key lives only on the server host. The HTTP server has no authentication of
-its own, so bind it to a private address such as a Tailscale IP. Loop runs are stored on
-the server, and their `workdir` and `checks` refer to paths on the server host.
+With `JEV_MCP_URL` set, both installers still register a **local** `jev-loop` server with
+Claude Code, Codex and Hermes, but give it `JEV_UPSTREAM`: the local server reads goal
+files, runs Loop checks and keeps run state on the machine where the project lives, and
+forwards only its Jev calls to the host's `/jev` endpoint. The TypeSafe key stays on that
+host. The HTTP server has no authentication of its own, so bind it to a private address
+such as a Tailscale IP.
 
 What that means in practice:
 
-- **Loop runs on the server host.** A goal's `workdir` must exist there and its `checks`
-  run there, so a Loop for a project that lives only on a client machine cannot run its
-  checks through the shared server. Keep such projects on the server host, or keep a
-  local install (no `JEV_MCP_URL`) on the machine that holds them. Gate, Route and Git
-  work from any client.
+- **Loop, Gate, Route and Git all work on every machine**, for projects on that machine.
+  A local server needs the repository clone and its Python dependencies, which the
+  installer sets up; it does not need the key.
+- **If the host is unreachable**, Jev decisions fail with `Jev upstream ... unreachable`.
+  Loop and Gate report that as a failed decision; they never guess.
 - **Keep `JEV_MCP_URL` set on every reinstall.** The installers replace the registration
-  each time; running one without `JEV_MCP_URL` switches that machine back to a local
-  server. That is also how to leave the shared server on purpose.
+  each time; running one without `JEV_MCP_URL` makes that machine call TypeSafe with its
+  own key. That is also how to leave the shared server on purpose.
 - **Updating.** On the server host, pull its clone and restart the service
-  (`systemctl restart jev-loop-http`); the tools are served from that clone. On each
-  client, `git pull` and rerun the installer with the same `JEV_MCP_URL` to refresh the
-  skill copies. Restart harness sessions afterwards.
+  (`systemctl restart jev-loop-http`). On each other machine, `git pull` and rerun the
+  installer with the same `JEV_MCP_URL` to refresh the local server and skill copies.
+  Restart harness sessions afterwards.
 - **Checking the server.** `systemctl status jev-loop-http` on the host. From a client,
   any HTTP status means it is up: `curl -s -m 5 -o /dev/null -w '%{http_code}\n' -X POST
   -H 'Content-Type: application/json' -d '{}' http://<tailnet-ip>:8765/mcp` prints `400`.
-  A plain `GET` keeps the stream open, so always pass a timeout. `claude mcp list` should
-  show `jev-loop: http://<tailnet-ip>:8765/mcp (HTTP) - ✔ Connected`.
+  A plain `GET` keeps the stream open, so always pass a timeout. On a client,
+  `JEV_UPSTREAM=http://<tailnet-ip>:8765 python jev_mcp.py --check` proves the forwarding
+  path end to end.
 - **Non-interactive shells.** Over SSH without a login shell, CLIs installed in
   `~/.local/bin` are often not on `PATH`, and the installer then prints `not on PATH -
   skipping` for them. Prefix the run with `PATH="$HOME/.local/bin:$PATH"`.

@@ -6,10 +6,11 @@ set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
 KEY_FILE="$HOME/.config/jev-loop/typesafe_api_key"
-# JEV_MCP_URL points every harness at one shared, always-on server (jev_mcp.py --http)
-# instead of starting a local copy; the key then lives only on that server.
+# JEV_MCP_URL names a shared, always-on server (jev_mcp.py --http) that holds the TypeSafe
+# key. The server registered here still runs locally, next to the projects whose goal files
+# and checks Loop needs; it only forwards its Jev calls to that server (JEV_UPSTREAM).
 MCP_URL="${JEV_MCP_URL:-}"
-TARGET="${MCP_URL:-$ROOT/jev_mcp.py}"
+TARGET="$ROOT/jev_mcp.py${MCP_URL:+ (Jev calls via $MCP_URL)}"
 
 if [ ! -x .venv/bin/python ] || ! .venv/bin/python -m pip --version >/dev/null 2>&1; then
   rm -rf .venv
@@ -30,7 +31,7 @@ if command -v claude >/dev/null 2>&1; then
 
   claude mcp remove jev-loop --scope user >/dev/null 2>&1 || true
   if [ -n "$MCP_URL" ]; then
-    claude mcp add --transport http jev-loop --scope user "$MCP_URL"
+    claude mcp add jev-loop --scope user -e "JEV_UPSTREAM=$MCP_URL" -- "$ROOT/.venv/bin/python" "$ROOT/jev_mcp.py"
   else
     claude mcp add jev-loop --scope user -- "$ROOT/.venv/bin/python" "$ROOT/jev_mcp.py"
   fi
@@ -46,7 +47,7 @@ if command -v codex >/dev/null 2>&1; then
 
   codex mcp remove jev-loop >/dev/null 2>&1 || true
   if [ -n "$MCP_URL" ]; then
-    codex mcp add jev-loop --url "$MCP_URL"
+    codex mcp add jev-loop --env "JEV_UPSTREAM=$MCP_URL" -- "$ROOT/.venv/bin/python" "$ROOT/jev_mcp.py"
   else
     codex mcp add jev-loop -- "$ROOT/.venv/bin/python" "$ROOT/jev_mcp.py"
   fi
@@ -65,28 +66,22 @@ if command -v hermes >/dev/null 2>&1; then
   # ${TYPESAFE_API_KEY} would reach Jev as the key itself instead of falling back to the key
   # file. Without the env block the server reads $KEY_FILE on its own.
   env_args=()
-  if grep -q '^TYPESAFE_API_KEY=.' "$HERMES_HOME/.env" 2>/dev/null; then
+  if [ -n "$MCP_URL" ]; then
+    env_args=(--env "JEV_UPSTREAM=$MCP_URL")
+  elif grep -q '^TYPESAFE_API_KEY=.' "$HERMES_HOME/.env" 2>/dev/null; then
     env_args=(--env 'TYPESAFE_API_KEY=${TYPESAFE_API_KEY}')
   fi
   # `hermes mcp remove` asks "Remove server? [Y/n]" and waits when run from a terminal.
   printf 'y\n' | hermes mcp remove jev-loop >/dev/null 2>&1 || true
-  if [ -n "$MCP_URL" ]; then
-    # For a URL Hermes first asks whether the server needs authentication (it does not: bind it
-    # to a private address), then whether to enable its tools.
-    # Older Hermes releases (e.g. v0.17) reject --connect-timeout; register without it then.
-    printf 'n\ny\n' | hermes mcp add jev-loop --url "$MCP_URL" --connect-timeout 20 ||
-      printf 'n\ny\n' | hermes mcp add jev-loop --url "$MCP_URL"
-  else
-    printf 'y\n' | hermes mcp add jev-loop --command "$ROOT/.venv/bin/python" \
-      ${env_args[@]+"${env_args[@]}"} --args "$ROOT/jev_mcp.py"
-  fi
+  printf 'y\n' | hermes mcp add jev-loop --command "$ROOT/.venv/bin/python" \
+    ${env_args[@]+"${env_args[@]}"} --args "$ROOT/jev_mcp.py"
   echo "MCP server registered: jev-loop -> $TARGET (start a new Hermes session)"
 else
   echo "hermes not on PATH - skipping Hermes setup."
 fi
 
 if [ -n "$MCP_URL" ]; then
-  echo "Using the shared server at $MCP_URL; its host holds the TypeSafe key. Skipping the local check."
+  JEV_UPSTREAM="$MCP_URL" .venv/bin/python jev_mcp.py --check
   exit 0
 fi
 if [ -z "${TYPESAFE_API_KEY:-}" ] && [ ! -s "$KEY_FILE" ]; then
