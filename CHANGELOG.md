@@ -5,6 +5,8 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+## [2026.09.28.2050] - 2026-09-28
+
 ### Fixed
 - Loop failed with "file not found" on machines pointed at the shared server, because the
   remote server cannot see their goal files or run their checks. With `JEV_MCP_URL` the
