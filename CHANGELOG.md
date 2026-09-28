@@ -5,6 +5,20 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Added
+- Gate: four stateless MCP tools that ask Jev before a large model runs. `gate_triage`
+  classifies scheduled, polled and notified events as ignore, known, report or act;
+  `gate_verdict` judges which review findings the evidence already closes and whether the
+  next review is none, narrow or full; `gate_decide` answers a question the harness was
+  about to ask the owner from its own options and says whether the owner must decide;
+  `gate_pick` chooses a tool, skill, session or file from one-line descriptions. Decisions
+  are logged to `runs/gate.jsonl`, and `python jev_mcp.py --gate <name>` gives scripts
+  and cron jobs the same decisions without an MCP host.
+- Skill rules for when to call each Gate tool, and Loop now asks `gate_verdict` before a
+  repeat review round.
+- Document a code search-and-repair workflow within Jev Loop: inspect matches in
+  context, change only confirmed defects, and verify the repair through Loop.
+
 ## [2026.09.27.1827] - 2026-09-27
 
 ### Changed
