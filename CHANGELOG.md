@@ -5,6 +5,8 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+## [2026.09.28.1616] - 2026-09-28
+
 ### Fixed
 - Registering a shared server URL with Hermes no longer stalls the installers: they
   answer Hermes' authentication prompt with no before enabling the tools.
