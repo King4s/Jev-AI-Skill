@@ -5,6 +5,8 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+## [2026.09.28.1831] - 2026-09-28
+
 ### Changed
 - The documentation now names everything the skill contains: README's introduction
   says four capabilities (Loop, Gate, Route, Git) plus `find_code.py` and `--watch`, lists
