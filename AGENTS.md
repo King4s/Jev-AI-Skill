@@ -1,7 +1,7 @@
 # AGENTS.md - instructions for AI maintainers
 
-This repository contains Jev-AI-Skill, one installed skill with three capabilities: Loop, Route and
-Git. Keep docs and implementation aligned. Repository docs and source comments are in
+This repository contains Jev-AI-Skill, one installed skill with four capabilities: Loop, Gate,
+Route and Git. Keep docs and implementation aligned. Repository docs and source comments are in
 English; answer the owner in their language.
 
 ## Components
@@ -9,7 +9,11 @@ English; answer the owner in their language.
 - `jev_mcp.py` is the `jev-loop` MCP server. Jev provides Loop decisions; the server runs
   configured checks, enforces stop conditions and records state and a decision tape. The
   client harness does the work and obtains an independent review. Run state is stored in
-  `runs/<id>.state.json`; the tape is `runs/<id>.jsonl`.
+  `runs/<id>.state.json`; the tape is `runs/<id>.jsonl`. The same file exposes the four
+  stateless Gate tools (`gate_triage`, `gate_verdict`, `gate_decide`, `gate_pick`), logged
+  to `runs/gate.jsonl`, and the `--gate <name>` command line for scripts without an MCP
+  host. Gate inputs are clipped (`SUMMARY_CHARS`, `ITEM_CHARS`, `CONTEXT_CHARS`,
+  `MAX_BATCH`); keep them that way.
 - `skill/jev/SKILL.md` is the shared skill for Loop, Route and Git. Its standard-library
   helpers are `route.py` and `git_decide.py` in the same directory. Installed skills use
   the name `jev`, in the harness-specific skills directory.

@@ -266,7 +266,8 @@ def test_max_turns(goal, monkeypatch):
 def test_mcp_server_exposes_tools():
     import asyncio
     names = {t.name for t in asyncio.run(m.build_server().list_tools())}
-    assert names == {"loop_start", "loop_decide", "loop_record_review", "loop_record_turn", "loop_status"}
+    assert names == {"loop_start", "loop_decide", "loop_record_review", "loop_record_turn", "loop_status",
+                     "gate_triage", "gate_verdict", "gate_decide", "gate_pick"}
 
 
 def test_api_key_env_then_file(tmp_path, monkeypatch):

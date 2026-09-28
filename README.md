@@ -14,6 +14,7 @@ provides judgments; your AI coding tool performs the work.
 | Capability | What it does | Why it helps |
 | --- | --- | --- |
 | **Loop** | Turns a build or code-repair goal into execution steps, runs configured checks and requests independent review. | Completion depends on checks and a separate review, with saved state for resuming work. |
+| **Gate** | Asks Jev, before a large model runs, whether an event needs an agent, which review findings are already closed, whether a question must go to the owner, and which tool or skill fits. | Scheduled jobs, polls, notifications, review rounds and owner questions stop consuming large-model turns when Jev can answer from a compact state. |
 | **Route** | Chooses a model capability tier, a relevant installed skill and whether to delegate. | Routine tasks can use lighter models while harder work gets stronger help; actual cost and quality depend on the available models. |
 | **Git** | Recommends commit, push or pull-request steps and applies repository rules. | Keeps publishing decisions tied to repository facts, review status and your authorization. |
 
@@ -47,7 +48,8 @@ request to find locations only reports them without editing files.
 
 The installed skill is named `jev`. The MCP server and its tools keep their existing
 identity, `jev-loop` (`loop_start`, `loop_decide`, `loop_record_turn`,
-`loop_record_review`, `loop_status`). Route and Git are Python helpers, not MCP tools.
+`loop_record_review`, `loop_status`, and the Gate tools `gate_triage`, `gate_verdict`,
+`gate_decide`, `gate_pick`). Route and Git are Python helpers, not MCP tools.
 Say `jev`, `jev-loop`, `jev-route` or `jev-git`; these legacy triggers use the same skill.
 The installers migrate recognized old skill folders (`jev-loop`, `jev-route` and
 `jev-git` where configured), removing a folder only when its frontmatter confirms that
@@ -130,6 +132,36 @@ The server stores run state in `runs/<id>.state.json` and a decision tape in
 The separate legacy [loop.py](loop.py) script asks models through OpenRouter to execute
 and review the goal. Its `executor_model` and `review_model` settings in the example goal
 apply to that script; the MCP Loop uses the active harness for execution and review.
+
+## Gate
+
+Gate came out of an audit of the owner's Hermes, Codex and Claude Code histories: the
+largest token sinks were not coding, but scheduled jobs that woke an agent to echo an exit
+code, timers that replayed a whole coordinator thread to find no work, chat-room turns that
+answered "pass", notification turns that confirmed a green result, review rounds re-run on
+findings already closed, and questions to the owner whose recommended answer was already
+known. Each Gate tool replaces one of those turns with a single Jev call over a compact
+state, and logs the decision to `runs/gate.jsonl`.
+
+| Tool | Question Jev answers | Result |
+| --- | --- | --- |
+| `gate_triage(events, known, policy)` | For each of up to 40 events: routine, already known, worth a one-line report, or does an agent have to act? | `action` per event, `skip_agent`, `report` |
+| `gate_verdict(goal, items, evidence, changes)` | Which open findings or criteria does the evidence close, and is the next review none, narrow or full? | `items` with `p_closed`, `open`, `review` |
+| `gate_decide(question, options, context, recommended, policy)` | Which of the harness's own options answers the question, and must the owner decide it themselves? | `choice`, `p_ask_owner`, `proceed` |
+| `gate_pick(task, candidates, context)` | Which tool, skill, session, channel or file fits the task, from one-line descriptions? | `pick` or `null`, `top` |
+
+Events and items are clipped to a few hundred characters each; raw output never reaches
+Jev. Scripts without an MCP host, such as cron jobs, get the same decisions from the
+command line:
+
+```bash
+echo '{"events": [{"kind": "cron", "source": "smoke", "summary": "exit 1: /suite 404", "exit_code": 1}],
+       "known": ["Suite Landing: HTTP 404"]}' | python jev_mcp.py --gate triage
+```
+
+Gate decides whether a large model runs; it does not replace deterministic facts such as
+exit codes or commit comparisons, and an error from a Gate tool means the expensive path
+must be taken, never that an event is ignored.
 
 ## Route
 

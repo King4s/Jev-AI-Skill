@@ -1,11 +1,43 @@
 ---
 name: jev
-description: Jev-AI-Skill is one skill for Claude Code, Codex and Hermes with three capabilities — Loop for building, finding and fixing code, and review; Route for model/skill/delegation choices; Git for guarded repository steps. Triggers include Jev-AI-Skill, jev, jev-loop, kør loopen, byg med jev, find og ret med jev, lad Jev styre, jev-route, lad Jev vælge, jev-git and skal det pushes.
+description: Jev-AI-Skill is one skill for Claude Code, Codex and Hermes with four capabilities — Loop for building, finding and fixing code, and review; Gate for cheap Jev checks before a large model runs (event triage, review verdicts, owner questions, tool choice); Route for model/skill/delegation choices; Git for guarded repository steps. Triggers include Jev-AI-Skill, jev, jev-loop, jev-gate, kør loopen, byg med jev, lad Jev styre, jev-route, lad Jev vælge, jev-git and skal det pushes.
 ---
 
 # Jev-AI-Skill
 
 The project is Jev-AI-Skill; its installed skill name and invocation remain `jev`.
+
+## Gate - ask Jev before spending a large model
+
+Gate is four stateless tools on the `jev-loop` MCP server (in Hermes: `mcp_jev_loop_gate_*`).
+Each takes a compact, structured state, costs one Jev call and is logged to
+`runs/gate.jsonl`. Use them at these moments, every time, before reasoning:
+
+| Moment | Tool | What you pass | What you do with the answer |
+| --- | --- | --- | --- |
+| A scheduled job, poll, background process, notification, chat-room event or ticket arrives | `gate_triage(events, known, policy)` | Up to 40 events: `kind`, `source`, `summary` (<= 600 chars: the tail, exit code, what routine looks like), plus `known` fingerprints of problems already reported | `ignore`/`known`: do nothing, no reply, no summary. `report`: pass the summary on in one line, unchanged. `act`: now investigate. `skip_agent=true` means end the turn. |
+| A reviewer said `done=false`, or a check found gaps, and you are about to start another round | `gate_verdict(goal, items, evidence, changes)` | The open findings or criteria, compact evidence (check tails, gate results, turn notes) and what changed since | `review=none`: no new round. `narrow`: review only `open`. `full`: full independent review. Never re-run a full round on items Jev already closed. |
+| You are about to ask the owner a question and you already have options or a recommended answer | `gate_decide(question, options, context, recommended, policy)` | Your own options as `{label: meaning}`, the context and the recommended label | `proceed=true`: act on `choice` and tell the owner in one line. Otherwise ask, leading with `recommended`. |
+| You would read many tool, skill, session, channel or file descriptions to pick one | `gate_pick(task, candidates, context)` | `{name: one-line description}` for 2-40 candidates | Read only the picked candidate in full. `pick=null`: inspect the `top` candidates yourself. |
+
+Rules:
+
+- Never send raw output. Summaries carry the exit code, the last lines and what routine
+  looks like; Jev is strong on a short state and weak on distractors.
+- The tools decide whether a large model runs; they do not replace deterministic facts.
+  An exit code, a `git rev-parse HEAD` comparison or a test count is code, not a question.
+- Keep `known` current: when a problem is reported, add its one-line fingerprint so the
+  next occurrence is `known`. Drop it when the problem is fixed.
+- A scheduled job that only echoes a script's exit code should not run an agent at all.
+  Run the script without an agent and, on a non-zero exit, call Gate from the script:
+  `python jev_mcp.py --gate triage < request.json` prints the same decision as the MCP
+  tool (`--gate verdict|decide|pick` likewise). The JSON object holds the tool's arguments.
+- A timer that resumes an idle coordinator should feed `gate_triage` the state files'
+  changed lines and resume only on `act`.
+- Owner policy defaults to: decide and act alone; ask only for irreversible, paid, outward,
+  credential or instruction-contradicting steps. Pass a `policy` string to change it.
+- If a Gate tool returns `{"error": ...}`, the decision failed: do the work the expensive way
+  and say so. Never treat an error as "ignore".
 
 ## Loop
 
@@ -30,8 +62,9 @@ locate code, report the locations and do not edit it.
 ## Phase 1 - Interview (skip what you already know)
 
 Pull everything you can from the user's message and the current directory first.
-Then ask only what is still unknown. Use an available structured question tool when the
-harness provides one; otherwise ask clearly in chat. Keep questions concrete and concise,
+Then ask only what is still unknown, and run each remaining question through
+`gate_decide` first; ask the user only when it says so. Use an available structured
+question tool when the harness provides one; otherwise ask clearly in chat. Keep questions concrete and concise,
 with a recommended default where useful. If *what to build* is completely missing, ask
 that first. Harness tool availability changes, so check the tools actually exposed in the
 current session rather than assuming a fixed question or delegation tool.
@@ -95,9 +128,11 @@ would affect the work.
 Jev (via the `jev-loop` MCP server) is the decider; you are the executor. Never decide
 routing, "done" or giving up yourself - the server does, and it runs the checks.
 In Hermes the tools are named `mcp_jev_loop_loop_start`, `mcp_jev_loop_loop_decide`,
-`mcp_jev_loop_loop_record_turn`, `mcp_jev_loop_loop_record_review`, `mcp_jev_loop_loop_status`;
-in Claude Code and Codex they come from the `jev-loop` MCP server as `loop_start`,
-`loop_decide`, `loop_record_turn`, `loop_record_review` and `loop_status`.
+`mcp_jev_loop_loop_record_turn`, `mcp_jev_loop_loop_record_review`, `mcp_jev_loop_loop_status`
+and `mcp_jev_loop_gate_triage`, `mcp_jev_loop_gate_verdict`, `mcp_jev_loop_gate_decide`,
+`mcp_jev_loop_gate_pick`; in Claude Code and Codex they come from the `jev-loop` MCP
+server as `loop_start`, `loop_decide`, `loop_record_turn`, `loop_record_review`,
+`loop_status`, `gate_triage`, `gate_verdict`, `gate_decide` and `gate_pick`.
 
 1. `loop_start(goal_path)` -> `run_id`.
 2. `loop_decide(run_id)` and act on `next`:
@@ -107,6 +142,10 @@ in Claude Code and Codex they come from the `jev-loop` MCP server as `loop_start
      `loop_record_turn(run_id, notes, files, executor_ok)` - `notes` is 1-2 honest
      sentences, `files` relative to `workdir`, `executor_ok=false` if you could not do
      the step. Don't run the configured checks yourself; the server does.
+   - **`review`** after an earlier `loop_record_review(done=false)`: first call
+     `gate_verdict` with the reviewer's `missing`, the check results and the turn notes since;
+     on `review=narrow` brief the reviewer on `open` only. On the first review, or on
+     `full`, review everything.
    - **`review`**: get an independent review in a context that cannot see your reasoning,
      using a review/delegation tool actually available in the harness. Examples include a
      delegated task in Hermes, an independent agent in Claude Code, or a fresh read-only

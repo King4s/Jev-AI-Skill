@@ -1,4 +1,4 @@
-"""Jev's Loop capability, exposed through the ``jev-loop`` MCP server.
+"""Jev's Loop and Gate capabilities, exposed through the ``jev-loop`` MCP server.
 
 The harness uses the installed ``jev`` skill to execute work and request an independent
 review. The server asks Jev for routing, completion and recovery decisions, runs configured
@@ -9,6 +9,11 @@ Protocol per turn:
   loop_decide        -> next = "execute" | "review" | "stop"
   (review)           -> loop_record_review -> next = "execute" | "stop"
   (execute role)     -> loop_record_turn   -> checks run, then loop_decide again
+
+Gate (stateless, one Jev call each, logged to runs/gate.jsonl):
+  gate_triage        -> per event: ignore | known | report | act; skip_agent when no event needs one
+  gate_verdict       -> per item: closed or open; review = none | narrow | full
+  gate_decide        -> a choice among the harness's own options and whether the owner must decide
 
 Needs ``TYPESAFE_API_KEY`` in the environment or ``~/.config/jev-loop/typesafe_api_key``.
 Run:   python jev_mcp.py            (stdio MCP server)
@@ -392,6 +397,206 @@ class Run:
                 "next": "call loop_decide"}
 
 
+# ---------- Gate ----------
+#
+# Cheap Jev judgments taken *before* a large model is run. They come from an audit of the
+# owner's Hermes, Codex and Claude Code histories (2026-09-28): the largest token sinks were
+# cron jobs that woke an agent to echo an exit code, idle-resume timers that replayed a whole
+# coordinator thread to find no work, group-chat turns that answered "(pass)", notification
+# turns that only confirmed a green result, review rounds re-run on unchanged criteria, and
+# questions to the owner whose recommended answer was already known. Each tool is stateless:
+# the harness passes a compact, structured state (never raw output), Jev answers in one call,
+# and the decision is appended to the gate tape.
+
+GATE_TAPE = RUNS / "gate.jsonl"
+SUMMARY_CHARS = 600
+ITEM_CHARS = 500
+CONTEXT_CHARS = 1500
+MAX_BATCH = 40
+
+TRIAGE_ACTIONS = {
+    "ignore": "Routine success or no change: the expected result; nothing to report, nothing to do",
+    "known": "The same problem is already listed in `known` or was reported before; repeating it adds nothing",
+    "report": "A new problem or change worth one short report to the owner; no agent work is needed",
+    "act": "Something changed that an agent must investigate or work on: a failure, a request, new work",
+}
+
+REVIEW_SCOPES = {
+    "none": "Every item is closed by evidence that stands on its own; no reviewer is needed now",
+    "narrow": "Only the changed items need a reviewer's eyes; the rest of the work is untouched",
+    "full": "The change reaches beyond the listed items, or the evidence is thin; a full independent review is needed",
+}
+
+DEFAULT_POLICY = ("The owner wants the assistant to decide and act on its own. Ask the owner only "
+                  "when a step is irreversible, spends money, publishes or sends something to "
+                  "others, needs credentials or an interactive login, or contradicts an explicit "
+                  "instruction from the owner.")
+
+
+def _clip(text, n):
+    s = " ".join(str(text if text is not None else "").split())
+    return s if len(s) <= n else s[:n - 3] + "..."
+
+
+def _gate_log(tool, **kw):
+    RUNS.mkdir(exist_ok=True)
+    rec = {"t": time.strftime("%Y-%m-%d %H:%M:%S"), "tool": tool, **kw}
+    with open(GATE_TAPE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
+
+
+def _choice(answer, allowed, fallback):
+    """Jev's choice, or `fallback` when it names something outside `allowed`."""
+    c = answer.get("choice")
+    return (c if c in allowed else fallback, answer.get("confidence"), answer.get("probabilities", {}))
+
+
+def gate_triage(events, known=(), policy="", model="jev-latest"):
+    """Decide per event whether an agent must run at all.
+
+    events: [{"kind": "cron|process|notification|message|room|ticket|...", "source": "...",
+              "summary": "<= 600 chars of what happened", "exit_code": int|None,
+              "expected": "what a routine result looks like"}]
+    known:  short fingerprints of problems already reported (so a repeat is `known`).
+    Returns one action per event and `skip_agent`, true when no event needs an agent."""
+    if not events:
+        raise ValueError("events is empty")
+    if len(events) > MAX_BATCH:
+        raise ValueError(f"at most {MAX_BATCH} events per call")
+    state = {"policy": _clip(policy or DEFAULT_POLICY, CONTEXT_CHARS),
+             "known": [_clip(k, ITEM_CHARS) for k in list(known)[:MAX_BATCH]],
+             "events": {}}
+    qs = {}
+    for i, e in enumerate(events, 1):
+        key = f"e{i}"
+        ev = {"kind": _clip(e.get("kind", "event"), 40), "source": _clip(e.get("source", ""), 120),
+              "summary": _clip(e.get("summary", ""), SUMMARY_CHARS)}
+        if e.get("exit_code") is not None:
+            ev["exit_code"] = int(e["exit_code"])
+        if e.get("expected"):
+            ev["expected"] = _clip(e["expected"], ITEM_CHARS)
+        state["events"][key] = ev
+        qs[key] = {"type": "choice", "criteria": TRIAGE_ACTIONS,
+                   "instructions": f"See `events.{key}`, `known` and `policy`. What should happen with it?"}
+    raw = jev(model, state, qs)
+    results = []
+    for i, e in enumerate(events, 1):
+        action, conf, probs = _choice(raw["answers"][f"e{i}"], TRIAGE_ACTIONS, "act")
+        results.append({"event": i, "source": state["events"][f"e{i}"]["source"], "action": action,
+                        "confidence": conf, "probabilities": probs,
+                        "needs_agent": action == "act", "needs_report": action == "report"})
+    out = {"results": results, "skip_agent": not any(r["needs_agent"] for r in results),
+           "report": [r["event"] for r in results if r["needs_report"]], "model": raw.get("model")}
+    _gate_log("triage", events=len(events), actions=[r["action"] for r in results], model=out["model"])
+    return out
+
+
+def gate_verdict(goal, items, evidence, changes="", model="jev-latest", closed_threshold=0.7):
+    """Judge, per item, whether the evidence closes it, and which review scope is still needed.
+
+    items:    reviewer findings still open, or acceptance criteria to re-check (<= 40).
+    evidence: compact facts - gate results, test tails, turn notes (each <= 500 chars).
+    changes:  what changed since the items were written (e.g. the commit message)."""
+    if not items:
+        raise ValueError("items is empty")
+    if len(items) > MAX_BATCH:
+        raise ValueError(f"at most {MAX_BATCH} items per call")
+    state = {"goal": _clip(goal, ITEM_CHARS), "items": {}, "changes": _clip(changes, CONTEXT_CHARS),
+             "evidence": [_clip(x, ITEM_CHARS) for x in list(evidence)[:MAX_BATCH]]}
+    qs = {}
+    for i, item in enumerate(items, 1):
+        state["items"][f"i{i}"] = _clip(item, ITEM_CHARS)
+        qs[f"i{i}"] = {"type": "noul", "instructions": f"Is `items.i{i}` closed: do `evidence` and "
+                                                       f"`changes` show it has been addressed for the `goal`?"}
+    qs["review"] = {"type": "choice", "criteria": REVIEW_SCOPES,
+                    "instructions": "Given `items`, `evidence` and `changes`, what review is still needed?"}
+    raw = jev(model, state, qs)
+    a = raw["answers"]
+    judged = []
+    for i, item in enumerate(items, 1):
+        p = float(a[f"i{i}"]["noul"])
+        judged.append({"item": state["items"][f"i{i}"], "p_closed": round(p, 3), "closed": p >= closed_threshold})
+    review, conf, probs = _choice(a["review"], REVIEW_SCOPES, "full")
+    if review == "none" and any(not j["closed"] for j in judged):
+        review = "narrow"  # an open item always gets a reviewer's eyes
+    out = {"items": judged, "open": [j["item"] for j in judged if not j["closed"]],
+           "review": review, "review_confidence": conf, "review_probabilities": probs, "model": raw.get("model")}
+    _gate_log("verdict", items=len(items), open=len(out["open"]), review=review, model=out["model"])
+    return out
+
+
+def gate_decide(question, options, context="", recommended="", policy="", model="jev-latest",
+                min_confidence=0.6, ask_threshold=0.5):
+    """Answer a question the harness was about to ask the owner, from its own options.
+
+    options: {"label": "what choosing it means"} (2-12). recommended: the label the harness
+    would suggest, if any. Returns the choice and `proceed`: true when Jev is confident and
+    the owner does not need to decide it themselves."""
+    if not isinstance(options, dict) or not 2 <= len(options) <= 12:
+        raise ValueError("options must map 2-12 labels to descriptions")
+    state = {"policy": _clip(policy or DEFAULT_POLICY, CONTEXT_CHARS),
+             "question": _clip(question, ITEM_CHARS),
+             "options": {_clip(k, 80): _clip(v, ITEM_CHARS) for k, v in options.items()},
+             "context": _clip(context, CONTEXT_CHARS)}
+    if recommended:
+        state["recommended"] = _clip(recommended, 80)
+    qs = {"choice": {"type": "choice", "criteria": state["options"],
+                     "instructions": "Which option best answers `question` for this owner, given "
+                                     "`context`, `policy` and (if set) `recommended`?"},
+          "ask_owner": {"type": "noul",
+                        "instructions": "Must the owner decide this themselves: is the chosen step "
+                                        "irreversible, does it spend money, publish or send something "
+                                        "outward, need credentials or an interactive login, or "
+                                        "contradict `policy` or an explicit instruction in `context`?"}}
+    raw = jev(model, state, qs)
+    a = raw["answers"]
+    choice, conf, probs = _choice(a["choice"], state["options"], recommended or next(iter(state["options"])))
+    p_ask = float(a["ask_owner"]["noul"])
+    proceed = (conf is None or float(conf) >= min_confidence) and p_ask < ask_threshold
+    out = {"choice": choice, "confidence": conf, "probabilities": probs, "p_ask_owner": round(p_ask, 3),
+           "proceed": proceed,
+           "reason": ("decide and continue" if proceed else
+                      "ask the owner: the step needs their decision" if p_ask >= ask_threshold else
+                      "ask the owner: Jev is not confident between the options"),
+           "model": raw.get("model")}
+    _gate_log("decide", question=state["question"][:120], choice=choice, proceed=proceed,
+              p_ask_owner=out["p_ask_owner"], model=out["model"])
+    return out
+
+
+def gate_pick(task, candidates, context="", model="jev-latest", min_confidence=0.5):
+    """Pick one candidate - a tool, skill, session, channel or file - for a task from one-line
+    descriptions, instead of reading every candidate's full description first."""
+    if not isinstance(candidates, dict) or not 2 <= len(candidates) <= MAX_BATCH:
+        raise ValueError(f"candidates must map 2-{MAX_BATCH} names to one-line descriptions")
+    state = {"task": _clip(task, ITEM_CHARS), "context": _clip(context, CONTEXT_CHARS),
+             "candidates": {_clip(k, 80): _clip(v, 200) for k, v in candidates.items()}}
+    qs = {"pick": {"type": "choice", "criteria": state["candidates"],
+                   "instructions": "Which candidate fits `task` best, given `context`?"}}
+    raw = jev(model, state, qs)
+    pick, conf, probs = _choice(raw["answers"]["pick"], state["candidates"], None)
+    confident = pick is not None and (conf is None or float(conf) >= min_confidence)
+    ranked = sorted(probs.items(), key=lambda kv: -float(kv[1]))[:3]
+    out = {"pick": pick if confident else None, "confidence": conf, "top": ranked,
+           "reason": "use pick" if confident else "no clear fit: inspect the top candidates yourself",
+           "model": raw.get("model")}
+    _gate_log("pick", task=state["task"][:120], pick=out["pick"], model=out["model"])
+    return out
+
+
+GATE_CLI = {"triage": gate_triage, "verdict": gate_verdict, "decide": gate_decide, "pick": gate_pick}
+
+
+def gate_cli(name, payload):
+    """`python jev_mcp.py --gate <name> < request.json`: the same Gate decision for scripts and
+    cron jobs that have no MCP host. The JSON object holds the tool's keyword arguments."""
+    if name not in GATE_CLI:
+        raise ValueError(f"unknown gate '{name}'; use one of {sorted(GATE_CLI)}")
+    if not isinstance(payload, dict):
+        raise ValueError("the request must be a JSON object of keyword arguments")
+    return GATE_CLI[name](**payload)
+
+
 # ---------- MCP ----------
 
 def build_server():
@@ -400,7 +605,10 @@ def build_server():
     mcp = MCPServer("jev-loop", version=VERSION, instructions=(
         "Jev Loop server for the installed jev skill. Call loop_start, then repeat "
         "loop_decide -> (review -> loop_record_review) -> execute -> loop_record_turn "
-        "until a response has next='stop'. Never skip a step or invent a decision."))
+        "until a response has next='stop'. Never skip a step or invent a decision. "
+        "Gate tools run before expensive work: gate_triage before reasoning about a "
+        "scheduled, polled or notified event; gate_verdict before another review round; "
+        "gate_decide before asking the owner a question you have options for."))
 
     def safe(fn):
         try:
@@ -449,6 +657,45 @@ def build_server():
         """Current phase, checks, history and tape path of a run."""
         return safe(lambda: Run(run_id).summary())
 
+    @mcp.tool()
+    def gate_triage(events: list[dict], known: list[str] = [], policy: str = "") -> dict:  # noqa: B006
+        """Before reasoning about scheduled, polled or notified events, ask Jev what each needs.
+
+        events: [{kind, source, summary (<=600 chars), exit_code?, expected?}], up to 40 in one
+        call. known: fingerprints of problems already reported. Returns per event
+        action = ignore | known | report | act, plus skip_agent (no event needs an agent) and
+        report (events whose summary should be passed on as-is). Only 'act' justifies running
+        a large model."""
+        return safe(lambda: globals()["gate_triage"](events, known, policy))
+
+    @mcp.tool()
+    def gate_verdict(goal: str, items: list[str], evidence: list[str], changes: str = "") -> dict:
+        """Before another review round, ask Jev which findings the evidence already closes.
+
+        items: open reviewer findings or acceptance criteria (<=40). evidence: compact facts
+        such as gate results, test tails and turn notes. changes: what changed since (commit
+        message). Returns closed/open per item and review = none | narrow | full."""
+        return safe(lambda: globals()["gate_verdict"](goal, items, evidence, changes))
+
+    @mcp.tool()
+    def gate_decide(question: str, options: dict[str, str], context: str = "",
+                    recommended: str = "", policy: str = "") -> dict:
+        """Before asking the owner a question you already have options for, ask Jev.
+
+        options: {label: meaning} (2-12). recommended: the label you would suggest. Returns
+        choice, confidence, p_ask_owner and proceed. If proceed is true, act on choice and tell
+        the owner in one line; otherwise ask the owner, leading with the recommended option."""
+        return safe(lambda: globals()["gate_decide"](question, options, context, recommended, policy))
+
+    @mcp.tool()
+    def gate_pick(task: str, candidates: dict[str, str], context: str = "") -> dict:
+        """Before reading every tool, skill, session or file description, ask Jev which one fits.
+
+        candidates: {name: one-line description} (2-40). Returns pick (or null when nothing
+        fits clearly), confidence and the top candidates. Read only the picked candidate's
+        full description."""
+        return safe(lambda: globals()["gate_pick"](task, candidates, context))
+
     return mcp
 
 
@@ -466,4 +713,12 @@ if __name__ == "__main__":
     import sys
     if "--check" in sys.argv:
         sys.exit(self_check())
+    if "--gate" in sys.argv:
+        name = sys.argv[sys.argv.index("--gate") + 1] if len(sys.argv) > sys.argv.index("--gate") + 1 else ""
+        try:
+            print(json.dumps(gate_cli(name, json.load(sys.stdin)), ensure_ascii=False))
+            sys.exit(0)
+        except Exception as e:  # a failed decision is reported, never guessed
+            print(json.dumps({"error": f"{type(e).__name__}: {e}"}, ensure_ascii=False))
+            sys.exit(2)
     build_server().run()
