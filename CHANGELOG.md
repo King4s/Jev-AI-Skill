@@ -5,6 +5,10 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Changed
+- The README opens with everything the skill now offers (Gate tools, `--watch`, the
+  shared HTTP server) and the banner shows Gate beside Loop, Route and Git.
+
 ## [2026.09.28.1831] - 2026-09-28
 
 ### Changed
