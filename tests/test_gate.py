@@ -183,7 +183,9 @@ def test_http_mode_serves_stateless_streamable_http(monkeypatch):
 # ---------- watch ----------
 
 def _cmd(code, text):
-    return [sys.executable, "-c", f"import sys; print({text!r}); sys.exit({code})"]
+    # UTF-8 explicitly: a Windows console encoding cannot print the emoji real checks use.
+    return [sys.executable, "-c",
+            f"import sys; sys.stdout.reconfigure(encoding='utf-8'); print({text!r}); sys.exit({code})"]
 
 
 def test_watch_is_silent_on_success_and_clears_known(tmp_path, monkeypatch):
