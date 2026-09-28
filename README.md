@@ -179,6 +179,17 @@ echo '{"events": [{"kind": "cron", "source": "smoke", "summary": "exit 1: /suite
        "known": ["Suite Landing: HTTP 404"]}' | python jev_mcp.py --gate triage
 ```
 
+A recurring health check needs no agent at all. `--watch` runs the check, prints nothing
+on success, and on failure asks Jev whether the problem is new; a new problem is printed
+once and remembered in the known file until the check passes again:
+
+```bash
+python jev_mcp.py --watch --name "Suite smoke" --known-file ~/.cache/jev/suite.known -- python3 smoke.py
+```
+
+Use it as the script of a script-only scheduled job, such as a Hermes `no_agent` cron job,
+where empty output is a silent run.
+
 Gate decides whether a large model runs; it does not replace deterministic facts such as
 exit codes or commit comparisons, and an error from a Gate tool means the expensive path
 must be taken, never that an event is ignored.

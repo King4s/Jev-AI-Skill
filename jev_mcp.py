@@ -709,6 +709,46 @@ def self_check():
     return 0 if p > 0.5 else 1
 
 
+KNOWN_MAX = 20
+
+
+def watch(name, cmd, known_file, expected="exit 0", timeout=300):
+    """Run a check command for a script-only scheduled job and return (text, exit_code).
+
+    Exit 0 prints nothing and clears the known list. A non-zero exit becomes one
+    `gate_triage` event; `ignore` and `known` stay silent, `report` and `act` print one short
+    message and remember it in `known_file`, so the same problem is reported once instead of
+    on every run. If Jev cannot be reached the failure is printed: a failed decision never
+    hides a problem. No large model runs at any point."""
+    known_path = Path(known_file)
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=timeout)
+        rc, out = r.returncode, (r.stdout + r.stderr)
+    except subprocess.TimeoutExpired:
+        rc, out = 124, f"TIMEOUT after {timeout}s"
+    if rc == 0:
+        if known_path.exists():
+            known_path.unlink()
+        return "", 0
+    tail = _clip(out[-SUMMARY_CHARS * 2:], SUMMARY_CHARS)
+    known = [k for k in known_path.read_text(encoding="utf-8").splitlines() if k.strip()] \
+        if known_path.exists() else []
+    message = f"{name}: exit {rc}. {tail}"
+    try:
+        res = gate_triage([{"kind": "scheduled check", "source": name, "summary": tail,
+                            "exit_code": rc, "expected": expected}], known=known)
+        action = res["results"][0]["action"]
+    except Exception as e:  # noqa: BLE001 - report the failure rather than guess
+        return f"{message}\n(Jev unavailable: {type(e).__name__}; reported without triage)", 0
+    if action in ("ignore", "known"):
+        return "", 0
+    known_path.parent.mkdir(parents=True, exist_ok=True)
+    known_path.write_text("\n".join((known + [_clip(f'{name}: {tail}', ITEM_CHARS)])[-KNOWN_MAX:]) + "\n",
+                          encoding="utf-8")
+    return message, 0
+
+
 def serve_http(host, port):
     """Serve the same tools over streamable HTTP at http://host:port/mcp, so one always-on
     machine can host the server for every harness on the tailnet. Stateless: run state is
@@ -720,6 +760,18 @@ if __name__ == "__main__":
     import sys
     if "--check" in sys.argv:
         sys.exit(self_check())
+    if "--watch" in sys.argv:
+        # python jev_mcp.py --watch --name NAME --known-file PATH [--expected TEXT] -- CMD ...
+        def opt(flag, default=None):
+            return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
+        if "--" not in sys.argv or not opt("--name") or not opt("--known-file"):
+            print("usage: jev_mcp.py --watch --name NAME --known-file PATH [--expected TEXT] -- CMD ...")
+            sys.exit(2)
+        text, code = watch(opt("--name"), sys.argv[sys.argv.index("--") + 1:], opt("--known-file"),
+                           opt("--expected", "exit 0"), int(opt("--timeout", "300")))
+        if text:
+            print(text)
+        sys.exit(code)
     if "--http" in sys.argv:
         def arg(flag, default):
             return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
