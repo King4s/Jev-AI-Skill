@@ -6,6 +6,10 @@ New releases are made with `.\release.ps1`.
 ## [Unreleased]
 
 ### Added
+- `jev_mcp.py --http --host <ip> --port <port>` serves the same tools over stateless
+  streamable HTTP, so one always-on host can serve every machine on a private network.
+  Setting `JEV_MCP_URL` makes both installers register that URL with Claude Code, Codex
+  and Hermes instead of a local server. A systemd unit is in `deploy/`.
 - Gate: four stateless MCP tools that ask Jev before a large model runs. `gate_triage`
   classifies scheduled, polled and notified events as ignore, known, report or act;
   `gate_verdict` judges which review findings the evidence already closes and whether the

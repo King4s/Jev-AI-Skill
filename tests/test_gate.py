@@ -166,3 +166,15 @@ def test_mcp_server_exposes_gate_tools():
     import asyncio
     names = {t.name for t in asyncio.run(m.build_server().list_tools())}
     assert {"gate_triage", "gate_verdict", "gate_decide", "gate_pick"} <= names
+
+
+def test_http_mode_serves_stateless_streamable_http(monkeypatch):
+    calls = {}
+
+    class Fake:
+        def run(self, transport, **kw):
+            calls["transport"], calls["kw"] = transport, kw
+    monkeypatch.setattr(m, "build_server", lambda: Fake())
+    m.serve_http("100.64.0.1", 8765)
+    assert calls == {"transport": "streamable-http",
+                     "kw": {"host": "100.64.0.1", "port": 8765, "stateless_http": True}}

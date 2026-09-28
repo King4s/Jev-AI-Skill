@@ -30,3 +30,11 @@ def test_install_ps1_sets_up_codex():
     assert '.agents\\skills' in text, "Codex skill location missing"
     assert "codex mcp add jev-loop" in text, "Codex MCP registration missing"
     assert "claude mcp add jev-loop" in text, "Claude Code registration was lost"
+
+
+def test_install_ps1_supports_shared_server_url():
+    text = PS1.read_text(encoding="utf-8")
+    assert "$env:JEV_MCP_URL" in text
+    assert "claude mcp add --transport http jev-loop --scope user $mcpUrl" in text
+    assert "codex mcp add jev-loop --url $mcpUrl" in text
+    assert "hermes mcp add jev-loop --url $mcpUrl" in text

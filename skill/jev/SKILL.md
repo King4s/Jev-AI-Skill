@@ -213,6 +213,12 @@ Hermes setup is conditional. POSIX setup is conditional for all three harnesses:
 | Codex | `~/.agents/skills/jev/` | `codex mcp add` (`~/.codex/config.toml`) |
 | Hermes | `$HERMES_HOME/skills/jev/`, or `~/.hermes/skills/jev/` | `hermes mcp add` |
 
+To use one shared, always-on server instead of a local copy, set `JEV_MCP_URL` (for example
+`http://<tailnet-ip>:8765/mcp`) before running the installer; it registers that URL with
+every harness. The server host runs `jev_mcp.py --http --host <ip> --port 8765` and holds
+the key. Loop `workdir` and `checks` then run on the server host, so start Loop runs for
+projects that live there; Gate works from any machine.
+
 Then restart the harness / start a new session. In Codex, the skill is invoked with
 `/skills` or `$jev` (and it also triggers on the description).
 

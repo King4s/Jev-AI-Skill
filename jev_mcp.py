@@ -709,10 +709,22 @@ def self_check():
     return 0 if p > 0.5 else 1
 
 
+def serve_http(host, port):
+    """Serve the same tools over streamable HTTP at http://host:port/mcp, so one always-on
+    machine can host the server for every harness on the tailnet. Stateless: run state is
+    on disk, Gate has none. Bind to a tailnet address; the server has no auth of its own."""
+    build_server().run("streamable-http", host=host, port=port, stateless_http=True)
+
+
 if __name__ == "__main__":
     import sys
     if "--check" in sys.argv:
         sys.exit(self_check())
+    if "--http" in sys.argv:
+        def arg(flag, default):
+            return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
+        serve_http(arg("--host", "127.0.0.1"), int(arg("--port", "8765")))
+        sys.exit(0)
     if "--gate" in sys.argv:
         name = sys.argv[sys.argv.index("--gate") + 1] if len(sys.argv) > sys.argv.index("--gate") + 1 else ""
         try:
