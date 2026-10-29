@@ -5,6 +5,14 @@ New releases are made with `.\release.ps1`.
 
 ## [Unreleased]
 
+### Fixed
+- Windows install registered the MCP server with a bare `python`. The harness resolves that
+  name itself: Hermes uses its own bundled runtime, which has neither `requests` nor `mcp`, so
+  the server died on `import requests` and Hermes parked it as "Connection closed" with zero
+  tools. `install.ps1` now creates a project `.venv`, installs `requirements.txt` into it and
+  registers that absolute interpreter for Claude Code, Codex and Hermes - the same shape
+  `install.sh` already used.
+
 ## [2026.09.28.2050] - 2026-09-28
 
 ### Fixed
