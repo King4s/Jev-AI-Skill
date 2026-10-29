@@ -1,8 +1,8 @@
-"""install.ps1: parses cleanly and still carries the Codex block.
+"""install.ps1: parses cleanly, registers an absolute interpreter, keeps the Codex block.
 
 The script cannot be executed off Windows (it installs a real venv, calls pip and runs a
 live Jev check), so this checks what a CI run can honestly check: PowerShell's own parser
-plus the presence of the Codex setup in all three harness blocks.
+plus the registration commands in all three harness blocks.
 """
 import shutil
 import subprocess
@@ -35,8 +35,8 @@ def test_install_ps1_sets_up_codex():
 def test_install_ps1_supports_shared_server_url():
     text = PS1.read_text(encoding="utf-8")
     assert "$env:JEV_MCP_URL" in text
-    assert 'claude mcp add jev-loop --scope user -e "JEV_UPSTREAM=$mcpUrl" -- python $server' in text
-    assert 'codex mcp add jev-loop --env "JEV_UPSTREAM=$mcpUrl" -- python $server' in text
+    assert 'claude mcp add jev-loop --scope user -e "JEV_UPSTREAM=$mcpUrl" -- "$python" $server' in text
+    assert 'codex mcp add jev-loop --env "JEV_UPSTREAM=$mcpUrl" -- "$python" $server' in text
     assert '$hermesEnvArgs = @("--env", "JEV_UPSTREAM=$mcpUrl")' in text
     assert "--url" not in text and "--transport http" not in text
 
@@ -45,3 +45,23 @@ def test_install_ps1_answers_hermes_remove_prompt():
     """`hermes mcp remove` prompts [Y/n]; an unanswered prompt hangs the installer."""
     text = PS1.read_text(encoding="utf-8")
     assert '"y`n" | hermes mcp remove jev-loop' in text
+
+
+def test_install_ps1_registers_an_absolute_interpreter():
+    """A bare `python` is resolved by the harness at connect time.
+
+    Hermes resolves it to its own bundled runtime, which has neither requests nor mcp, so the
+    server died on `import requests` and the harness parked it as "Connection closed". The
+    registration must name the project venv interpreter explicitly.
+    """
+    text = PS1.read_text(encoding="utf-8")
+    assert '$python = Join-Path $PSScriptRoot ".venv\\Scripts\\python.exe"' in text, "venv interpreter variable missing"
+    assert "--command \"$python\"" in text, "Hermes registration does not use the venv interpreter"
+    assert "-- python $server" not in text, "a harness still registers the bare `python`"
+    assert "& $python -m pip install -q -r requirements.txt" in text, "dependencies are not installed into the venv"
+
+
+def test_install_ps1_creates_the_venv_before_installing():
+    text = PS1.read_text(encoding="utf-8")
+    assert "if (-not (Test-Path $python))" in text
+    assert "python -m venv $venvRoot" in text

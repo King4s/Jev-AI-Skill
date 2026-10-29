@@ -4,10 +4,22 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-python -m pip install -q -r requirements.txt
+# Every harness registers this server by absolute path. A bare `python` is resolved by the
+# harness at connect time - Hermes uses its own bundled runtime, which has none of these
+# dependencies, so the server died on `import requests` ("Connection closed"). The venv makes
+# the interpreter explicit and stable across harness upgrades.
+$python = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+$venvRoot = Join-Path $PSScriptRoot ".venv"
+if (-not (Test-Path $python)) {
+    python -m venv $venvRoot
+    if ($LASTEXITCODE -ne 0) { throw "Could not create the project virtualenv." }
+}
+& $python -m pip install -q --upgrade pip
+& $python -m pip install -q -r requirements.txt
+if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed." }
 
 $skillRoot = Join-Path $HOME ".claude\skills"
-python install_skill.py skill/jev $skillRoot --legacy jev-loop jev-route jev-git
+& $python install_skill.py skill/jev $skillRoot --legacy jev-loop jev-route jev-git
 if ($LASTEXITCODE -ne 0) { throw "Claude Code skill installation failed." }
 
 $server = Join-Path $PSScriptRoot "jev_mcp.py"
@@ -18,8 +30,8 @@ $mcpUrl = $env:JEV_MCP_URL
 $target = if ($mcpUrl) { "$server (Jev calls via $mcpUrl)" } else { $server }
 if (Get-Command claude -ErrorAction SilentlyContinue) {
     claude mcp remove jev-loop --scope user 2>$null | Out-Null
-    if ($mcpUrl) { claude mcp add jev-loop --scope user -e "JEV_UPSTREAM=$mcpUrl" -- python $server }
-    else { claude mcp add jev-loop --scope user -- python $server }
+    if ($mcpUrl) { claude mcp add jev-loop --scope user -e "JEV_UPSTREAM=$mcpUrl" -- "$python" $server }
+    else { claude mcp add jev-loop --scope user -- "$python" $server }
     Write-Host "MCP server registered: jev-loop -> $target (Claude Code)"
 } else {
     Write-Host "claude not on PATH - skipping Claude Code MCP setup."
@@ -28,12 +40,12 @@ if (Get-Command claude -ErrorAction SilentlyContinue) {
 # Codex: skills live in ~/.agents/skills, the server in ~/.codex/config.toml.
 if (Get-Command codex -ErrorAction SilentlyContinue) {
     $codexSkillRoot = Join-Path $HOME ".agents\skills"
-    python install_skill.py skill/jev $codexSkillRoot --legacy jev-loop
+    & $python install_skill.py skill/jev $codexSkillRoot --legacy jev-loop
     if ($LASTEXITCODE -ne 0) { throw "Codex skill installation failed." }
 
     codex mcp remove jev-loop 2>$null | Out-Null
-    if ($mcpUrl) { codex mcp add jev-loop --env "JEV_UPSTREAM=$mcpUrl" -- python $server }
-    else { codex mcp add jev-loop -- python $server }
+    if ($mcpUrl) { codex mcp add jev-loop --env "JEV_UPSTREAM=$mcpUrl" -- "$python" $server }
+    else { codex mcp add jev-loop -- "$python" $server }
     Write-Host "MCP server registered: jev-loop -> $target (Codex)"
 } else {
     Write-Host "codex not on PATH - skipping Codex setup."
@@ -43,7 +55,7 @@ if (Get-Command codex -ErrorAction SilentlyContinue) {
 if (Get-Command hermes -ErrorAction SilentlyContinue) {
     $hermesHome = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { Join-Path $HOME ".hermes" }
     $hermesSkillRoot = Join-Path $hermesHome "skills"
-    python install_skill.py skill/jev $hermesSkillRoot --legacy jev-loop
+    & $python install_skill.py skill/jev $hermesSkillRoot --legacy jev-loop
     if ($LASTEXITCODE -ne 0) { throw "Hermes skill installation failed." }
 
     # A Hermes stdio MCP subprocess gets a filtered environment, so the key is handed over in
@@ -59,7 +71,7 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
     }
     # `hermes mcp remove` asks "Remove server? [Y/n]" and waits on a console stdin.
     "y`n" | hermes mcp remove jev-loop 2>$null | Out-Null
-    "y`n" | hermes mcp add jev-loop --command python @hermesEnvArgs --args $server
+    "y`n" | hermes mcp add jev-loop --command "$python" @hermesEnvArgs --args $server
     Write-Host "MCP server registered: jev-loop -> $target (start a new Hermes session)"
 } else {
     Write-Host "hermes not on PATH - skipping Hermes setup."
@@ -68,10 +80,10 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
 $keyFile = Join-Path $HOME ".config\jev-loop\typesafe_api_key"
 if ($mcpUrl) {
     $env:JEV_UPSTREAM = $mcpUrl
-    python $server --check
+    & $python $server --check
 } elseif (-not [Environment]::GetEnvironmentVariable("TYPESAFE_API_KEY", "User") -and -not $env:TYPESAFE_API_KEY -and -not (Test-Path $keyFile)) {
     Write-Warning "No TypeSafe key. Set TYPESAFE_API_KEY (user env) or write it to $keyFile, then restart Claude Code."
 } else {
-    python $server --check
+    & $python $server --check
 }
 Write-Host "Done. Restart your harness (Claude Code / Codex), then say: 'byg med jev: <what you want>' or invoke the jev skill (/jev, or `$jev in Codex)."
